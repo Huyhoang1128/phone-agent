@@ -1,0 +1,408 @@
+services:
+  db:
+    image: postgres:18.3
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME:-mbcontrol}
+      POSTGRES_USER: ${DB_USER:-mbcontrol}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-mbcontrol}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+    ports:
+      - "5441:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-mbcontrol}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # v3.2.1 BUG-J — Redis cho TRUE cancel signal (3D). Django + agent_teams share
+  # cancel state qua key `scenario:cancel:{request_id}`. Prod đã có redis service
+  # ở docker-compose.yml, dev compose trước đó skip redis nên cancel signal cross
+  # service không hoạt động — giờ add lại.
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./mobile-control
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_NAME: ${DB_NAME:-mbcontrol}
+      DB_USER: ${DB_USER:-mbcontrol}
+      DB_PASSWORD: ${DB_PASSWORD:-mbcontrol}
+      DB_HOST: db
+      DB_PORT: 5432
+      DATABASE_URL: postgresql://${DB_USER:-mbcontrol}:${DB_PASSWORD:-mbcontrol}@db:5432/${DB_NAME:-mbcontrol}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-change-me-in-production}
+      DEBUG: ${DEBUG:-True}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0,app.example.com,phone.example.com}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:9094}
+      # Device topics: ISOLATED (dev-) so dev never reads events from / sends
+      # commands to PROD devices on the shared broker.
+      KAFKA_DEVICE_EVENTS_TOPIC: ${KAFKA_DEVICE_EVENTS_TOPIC:-dev-device-events}
+      KAFKA_COMMANDS_TOPIC: ${KAFKA_COMMANDS_TOPIC:-dev-device-commands}
+      KAFKA_DEVICE_COMMANDS_TOPIC: ${KAFKA_DEVICE_COMMANDS_TOPIC:-dev-device-commands}
+      # Video render: SHARED topics. The single GPU video-agent-worker only
+      # reads/writes these (there is no dev video worker), so dev MUST use them.
+      # Safe to share: scenario task_ids are globally unique (scn{id}-{uuid}) and
+      # the status consumer uses a dev-only group → dev/prod never collide.
+      KAFKA_TASK_STATUS_TOPIC: ${KAFKA_TASK_STATUS_TOPIC:-task_status}
+      # task_execution = nơi backend phát lệnh chạy trên thiết bị. Default ĐÃ đổi
+      # sang dev-ltthuc-* để lỡ thiếu biến .env cũng KHÔNG rơi về topic prod
+      # (tránh lệnh local chạy vào thiết bị prod). .env vẫn override giá trị này.
+      KAFKA_TASK_EXECUTION_TOPIC: ${KAFKA_TASK_EXECUTION_TOPIC:-dev-ltthuc-task_execution}
+      KAFKA_TASK_TOPIC: ${KAFKA_TASK_TOPIC:-dev-ltthuc-task_execution}
+      # Dedicated render-request topic (only the video worker consumes it) so
+      # device workers on task_execution never grab/fail render jobs. Shared.
+      KAFKA_GENERATE_VIDEO_TOPIC: ${KAFKA_GENERATE_VIDEO_TOPIC:-generate-video}
+      KAFKA_TASK_ERROR_TOPIC: ${KAFKA_TASK_ERROR_TOPIC:-dev-task_errors}
+
+      WEBRTC_ICE_SERVERS: '[{"urls":["stun:stun.l.google.com:19302"]},{"urls":["turn:${TURN_EXTERNAL_IP:-localhost}:3478"],"username":"${TURN_USERNAME:-turnuser}","credential":"${TURN_PASSWORD}"},{"urls":["turns:${TURN_EXTERNAL_IP:-localhost}:5349"],"username":"${TURN_USERNAME:-turnuser}","credential":"${TURN_PASSWORD}"}]'
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # fal.ai — Seedream v4.5 + Grok Imagine cho luồng "Tạo ảnh nhanh" (content.fal_utils)
+      FAL_KEY: ${FAL_KEY}
+      # FaceFusion face-swap — chạy server riêng. KHÔNG để default cứng: dev dùng LAN,
+      # server prod đi WAN nên địa chỉ khác nhau → mỗi môi trường tự set trong .env.
+      FACEFUSION_API_URL: ${FACEFUSION_API_URL}
+      FACEFUSION_API_KEY: ${FACEFUSION_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      # Google API key (Sheets API enabled) — lets the Google-Sheets importer read
+      # smart-chip / hyperlink cells (e.g. the Group column) via the Sheets API
+      # instead of the CSV export that strips hidden URLs. Set GOOGLE_API_KEY in .env.
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      AGENT_TEAMS_URL: ${AGENT_TEAMS_URL:-http://agent_teams:7777}
+      # Cloudfly S3-compatible object storage for APK uploads.
+      CLOUDFLY_ENABLED: ${CLOUDFLY_ENABLED:-False}
+      CLOUDFLY_ACCESS_KEY: ${CLOUDFLY_ACCESS_KEY:-}
+      CLOUDFLY_SECRET_KEY: ${CLOUDFLY_SECRET_KEY:-}
+      CLOUDFLY_BUCKET: ${CLOUDFLY_BUCKET:-your-bucket}
+      CLOUDFLY_S3_ENDPOINT: ${CLOUDFLY_S3_ENDPOINT:-https://s3.cloudfly.vn}
+      CLOUDFLY_REGION: ${CLOUDFLY_REGION:-us-east-1}
+      # Shared secret the device worker uses for the app-installation callback.
+      WORKER_CALLBACK_TOKEN: ${WORKER_CALLBACK_TOKEN:-}
+      # Chatbot TikTok (revise Q4.b — n8n bridge): n8n callback secret.
+      # n8n workflow `Tiktok_chatbot` add HTTP Request node với
+      # `Authorization: Bearer <N8N_CALLBACK_TOKEN>` để POST tới
+      # `/api/internal/n8n-notify-callback/`. Default token dev sinh ngẫu nhiên
+      # — đổi qua .env nếu push prod.
+      N8N_CALLBACK_TOKEN: ${N8N_CALLBACK_TOKEN}
+      # Phase 2.5 — khi true, _save_notification SKIP inline matcher dispatch
+      # → chỉ n8n bridge callback fire WorkflowTrigger (tránh dual-path race
+      # tạo 2 WorkflowRun cho 1 noti). Set true sau khi n8n bridge ready.
+      TIKTOK_USE_N8N_BRIDGE_DISPATCH: ${TIKTOK_USE_N8N_BRIDGE_DISPATCH:-true}
+      # Bypass LLM scorer: flush ngay mỗi tin (KHÔNG đợi gom tin rời).
+      # User sẽ cung cấp code xịn cho buffer logic sau.
+      CHATBOT_BUFFER_DISABLE_SCORING: ${CHATBOT_BUFFER_DISABLE_SCORING:-true}
+      # n8n webhook URL for the "Gen Content" AI flow (proxied server-side).
+      N8N_GENERATE_SCRIPTS_URL: ${N8N_GENERATE_SCRIPTS_URL:-https://n8n.example.com/webhook/generate-scripts}
+      # Inpaint (xóa chữ) chạy server riêng — service inpaint riêng.
+      INPAINT_API_URL: ${INPAINT_API_URL:-http://localhost:8022}
+      # "Tạo nhân vật": OpenAI image model (server-side) — sinh ảnh trực tiếp, không dùng face-swap ngoài.
+      OPENAI_IMAGE_MODEL: ${OPENAI_IMAGE_MODEL:-gpt-image-2}
+      # Image quality (low|medium|high). 'low' is ~15x cheaper than 'high'.
+      OPENAI_IMAGE_QUALITY: ${OPENAI_IMAGE_QUALITY:-low}
+      # Crawl API host for TikTok data-scraping endpoints.
+      API_CRAWL_HOST: ${API_CRAWL_HOST:-localhost}
+      # Guardrails so CSV/Sheet imports with many media files cannot exhaust
+      # the backend container.
+      FB_MEDIA_MAX_BYTES: ${FB_MEDIA_MAX_BYTES:-104857600}
+      FB_CSV_IMPORT_MAX_CONCURRENT_REQUESTS: ${FB_CSV_IMPORT_MAX_CONCURRENT_REQUESTS:-1}
+      FB_CSV_IMPORT_MAX_ROWS: ${FB_CSV_IMPORT_MAX_ROWS:-300}
+      FB_CSV_IMPORT_MAX_MEDIA_REFS: ${FB_CSV_IMPORT_MAX_MEDIA_REFS:-300}
+      FB_CSV_IMPORT_MAX_EXPANDED_MEDIA: ${FB_CSV_IMPORT_MAX_EXPANDED_MEDIA:-300}
+      FB_CSV_IMPORT_EXPAND_WORKERS: ${FB_CSV_IMPORT_EXPAND_WORKERS:-3}
+      FB_CSV_IMPORT_UPLOAD_WORKERS: ${FB_CSV_IMPORT_UPLOAD_WORKERS:-3}
+      # n8n webhook for forwarding TikTok chat notifications.
+      N8N_TIKTOK_CHAT_WEBHOOK_URL: ${N8N_TIKTOK_CHAT_WEBHOOK_URL:-https://n8n.example.com/webhook/trigger-notify}
+      N8N_TIKTOK_CHAT_WEBHOOK_METHOD: ${N8N_TIKTOK_CHAT_WEBHOOK_METHOD:-POST}
+
+    volumes:
+      - ./mobile-control:/app
+    ports:
+      - "8030:8000"
+    healthcheck:
+      test: [ "CMD-SHELL", "python manage.py check --database default 2>/dev/null || exit 1" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    command: >
+      sh -c "python manage.py collectstatic --noinput &&
+             python manage.py migrate &&
+             daphne -b 0.0.0.0 -p 8000 mbcontrol.asgi:application"
+
+  # Always-on Kafka consumer: turns video-agent-worker task_status messages into
+  # ContentScenario render results (video_url / status), polled by the FE.
+  video-status-consumer:
+    build:
+      context: ./mobile-control
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-mbcontrol}:${DB_PASSWORD:-mbcontrol}@db:5432/${DB_NAME:-mbcontrol}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-change-me-in-production}
+      DEBUG: ${DEBUG:-True}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:9094}
+      # The PROD-deployed video-worker publishes render results to the BARE
+      # `task_status`. This consumer MUST read that — NOT the global dev-ltthuc-*
+      # (which is device task status). Dedicated var so .env can't leak in here.
+      # Cross-env isolation is by group_id below + scenario-id DB lookup.
+      KAFKA_TASK_STATUS_TOPIC: ${KAFKA_VIDEO_STATUS_TOPIC:-task_status}
+      # Unique per environment — isolates this env's committed offsets (partition
+      # coverage is handled by manual assignment, not by the group_id).
+      KAFKA_VIDEO_STATUS_GROUP_ID: ${KAFKA_VIDEO_STATUS_GROUP_ID:-video-status-consumer-dev}
+      # Flush stdout immediately so `docker logs` shows the consumer's startup
+      # line ("assigned N partitions") and per-message logs in real time.
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./mobile-control:/app
+    command: sh -c "python manage.py consume_video_status"
+
+  # scheduler:
+  #   build:
+  #     context: ./mobile-control
+  #   restart: always
+  #   depends_on:
+  #     backend:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   environment:
+  #     DB_NAME: ${DB_NAME:-mbcontrol}
+  #     DB_USER: ${DB_USER:-mbcontrol}
+  #     DB_PASSWORD: ${DB_PASSWORD:-mbcontrol}
+  #     DB_HOST: db
+  #     DB_PORT: 5432
+  #     DATABASE_URL: postgresql://${DB_USER:-mbcontrol}:${DB_PASSWORD:-mbcontrol}@db:5432/${DB_NAME:-mbcontrol}
+  #     DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-change-me-in-production}
+  #     DEBUG: ${DEBUG:-True}
+  #     ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,app.example.com,phone.example.com}
+  #     REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  #     OPENAI_API_KEY: ${OPENAI_API_KEY}
+  #   volumes:
+  #     - ./mobile-control:/app
+  #   command: python manage.py run_scheduler
+
+  # Chatbot TikTok (Phase 2.1) — 3 worker process tiêu thụ Redis Streams +
+  # Kafka task_status. Tách container riêng vì là long-running consumer
+  # (XREADGROUP block + Kafka subscribe). Cùng image với backend (chung
+  # context ./mobile-control) — chỉ đổi command.
+
+  workflow_runner:
+    # Chatbot workers are OFF by default in dev — we only test video here, and
+    # these connect to the shared broker. Start them only when needed with:
+    #   docker compose -f docker-compose.dev.yml --profile chatbot up -d
+    profiles: [ "chatbot" ]
+    build:
+      context: ./mobile-control
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # KHÔNG copy đủ env như backend — workflow-runner chỉ cần DB + Redis + Kafka.
+      DATABASE_URL: postgresql://${DB_USER:-mbcontrol}:${DB_PASSWORD:-mbcontrol}@db:5432/${DB_NAME:-mbcontrol}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-change-me-in-production}
+      DEBUG: ${DEBUG:-True}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:9094}
+      KAFKA_TASK_EXECUTION_TOPIC: ${KAFKA_TASK_EXECUTION_TOPIC:-dev-task_execution}
+      KAFKA_TASK_STATUS_TOPIC: ${KAFKA_TASK_STATUS_TOPIC:-dev-task_status}
+      KAFKA_TASK_TOPIC: ${KAFKA_TASK_TOPIC:-dev-task_execution}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - ./mobile-control:/app
+    command: python manage.py run_workflow_runner
+
+  kafka_task_status_listener:
+    profiles: [ "chatbot" ]
+    build:
+      context: ./mobile-control
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-mbcontrol}:${DB_PASSWORD:-mbcontrol}@db:5432/${DB_NAME:-mbcontrol}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-change-me-in-production}
+      DEBUG: ${DEBUG:-True}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:9094}
+      KAFKA_TASK_STATUS_TOPIC: ${KAFKA_TASK_STATUS_TOPIC:-dev-task_status}
+    volumes:
+      - ./mobile-control:/app
+    command: python manage.py run_kafka_task_status_listener
+
+  workflow_dlq_handler:
+    profiles: [ "chatbot" ]
+    build:
+      context: ./mobile-control
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-mbcontrol}:${DB_PASSWORD:-mbcontrol}@db:5432/${DB_NAME:-mbcontrol}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-change-me-in-production}
+      DEBUG: ${DEBUG:-True}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    volumes:
+      - ./mobile-control:/app
+    command: python manage.py run_workflow_dlq_handler
+
+  # TCS-v2 Sprint 3 (#3): reconcile TiktokMessage rows stuck delivery_status=pending
+  # khi Kafka task_status mất/parse fail. Default scan mỗi 5 phút, threshold 10 phút.
+  # Xem docs/Chatbot_Tiktok/tcs_v2_sprint_3_delivery_unknown_sweeper.md.
+  chatbot_pending_sweeper:
+    profiles: [ "chatbot" ]
+    build:
+      context: ./mobile-control
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-mbcontrol}:${DB_PASSWORD:-mbcontrol}@db:5432/${DB_NAME:-mbcontrol}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-change-me-in-production}
+      DEBUG: ${DEBUG:-True}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+    volumes:
+      - ./mobile-control:/app
+    command: python manage.py run_stale_pending_sweeper --interval 300 --age-minutes 10
+
+  frontend:
+    build:
+      context: ./ui
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8030}
+        VITE_AGENT_TEAMS_URL: ${VITE_AGENT_TEAMS_URL:-http://localhost:7777}
+    restart: always
+    ports:
+      - "5173:80"
+
+  # Device-connectivity worker: consumes device-events / emits device-commands /
+  # writes task_status. Enabled for LOCAL real-device testing. All topics +
+  # group default to dev-ltthuc-* (matching .env) so this worker can NEVER read
+  # PROD device events or send commands to PROD devices on the shared broker.
+  # NOTE: it does NOT consume task_execution — the phoneagent (mobile-agent-worker,
+  # separate repo) does that; run it pointed at dev-ltthuc-task_execution too.
+  devices_worker:
+    build:
+      context: ./devices_worker
+    restart: always
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:9094}
+      KAFKA_DEVICE_EVENTS_TOPIC: ${KAFKA_DEVICE_EVENTS_TOPIC:-dev-ltthuc-device-events}
+      KAFKA_COMMANDS_TOPIC: ${KAFKA_COMMANDS_TOPIC:-dev-ltthuc-device-commands}
+      KAFKA_TASK_STATUS_TOPIC: ${KAFKA_TASK_STATUS_TOPIC:-dev-ltthuc-task_status}
+      KAFKA_DEVICES_WORKER_GROUP: ${KAFKA_DEVICES_WORKER_GROUP:-dev-ltthuc-device-worker}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      DATABASE_URL: postgresql://${DB_USER:-mbcontrol}:${DB_PASSWORD:-mbcontrol}@db:5432/${DB_NAME:-mbcontrol}
+
+  agent_teams_db:
+    image: agnohq/pgvector:18
+    restart: always
+    environment:
+      POSTGRES_DB: ${AGENT_DB_NAME:-agentdb}
+      POSTGRES_USER: ${AGENT_DB_USER:-agentdb}
+      POSTGRES_PASSWORD: ${AGENT_DB_PASSWORD:-agentdb}
+    volumes:
+      - agent_teams_postgres_data:/var/lib/postgresql
+    ports:
+      - "5532:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${AGENT_DB_USER:-agentdb}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  agent_teams:
+    build:
+      context: ./agent-teams
+    restart: always
+    # DEV: KHÔNG phụ thuộc 'redis' — dev compose không có service redis, và code
+    # agent-teams không import redis. Prod (docker-compose.yml) vẫn giữ redis + depends_on.
+    depends_on:
+      agent_teams_db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://${AGENT_DB_USER:-agentdb}:${AGENT_DB_PASSWORD:-agentdb}@agent_teams_db:5432/${AGENT_DB_NAME:-agentdb}
+      # ScriptStudio Footage RAG: đọc kho MediaSource (read-only) từ DB mbcontrol để
+      # reindex Footage Knowledge. Cùng mạng docker nên dùng host service "db".
+      MBCONTROL_DATABASE_URL: ${MBCONTROL_DATABASE_URL:-postgresql://${DB_USER:-mbcontrol}:${DB_PASSWORD:-mbcontrol}@db:5432/${DB_NAME:-mbcontrol}}
+      # JWT chung với backend (cùng default dev) để xác thực token nội bộ.
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-change-me-in-production}
+      # ScriptStudio cần OPENAI_API_KEY — truyền qua env/.env khi chạy (không hardcode).
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # v3.2.1 Option C — Gemini cho 5 reviewer (cross-family judgment).
+      # Set vào .env: GOOGLE_API_KEY=AIza...
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      # v3.2.1 Option C — per-role model override (provider:model_id).
+      # Default: scripter=openai:gpt-4o, reviewer=google:gemini-2.5-pro,
+      # parser+consolidator=openai:gpt-4o-mini. Xem agents.py:_make_scenario_model.
+      SCENARIO_SCRIPTER_MODEL: ${SCENARIO_SCRIPTER_MODEL:-}
+      SCENARIO_REVIEWER_MODEL: ${SCENARIO_REVIEWER_MODEL:-}
+      SCENARIO_PARSER_MODEL: ${SCENARIO_PARSER_MODEL:-}
+      SCENARIO_CONSOLIDATOR_MODEL: ${SCENARIO_CONSOLIDATOR_MODEL:-}
+      # Legacy override (set TẤT CẢ 4 role về 1 model — backward compat v3.2):
+      SCENARIO_THINK_MODEL: ${SCENARIO_THINK_MODEL:-}
+      EXA_API_KEY: ${EXA_API_KEY:-}
+      PARALLEL_API_KEY: ${PARALLEL_API_KEY:-}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      REDIS_PASSWORD: ""
+      # DEV: tắt rate-limit (cần redis). Prod để mặc định true.
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-false}
+      RATE_LIMIT_FREE_DAILY: ${RATE_LIMIT_FREE_DAILY:-50}
+      RATE_LIMIT_PRO_DAILY: ${RATE_LIMIT_PRO_DAILY:-500}
+      RATE_LIMIT_ENTERPRISE_DAILY: ${RATE_LIMIT_ENTERPRISE_DAILY:-5000}
+      RATE_LIMIT_DEFAULT_DAILY: ${RATE_LIMIT_DEFAULT_DAILY:-100}
+      AGENT_TEAMS_CORS_ORIGINS: ${AGENT_TEAMS_CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://app.example.com,https://app.example.com}
+    volumes:
+      - ./agent-teams:/app
+    ports:
+      - "7777:7777"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:7777/health" ]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+
+volumes:
+  postgres_data:
+  redis_data:
+  agent_teams_postgres_data:

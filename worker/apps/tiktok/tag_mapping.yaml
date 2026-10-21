@@ -1,0 +1,14 @@
+# Mapping: tên thường gọi (lowercase, normalized) → TikTok @username
+# Dùng cho tool tiktok_open_video_comment_and_tag khi payload
+# chỉ có tag_display_name mà thiếu tag_username.
+#
+# Cách thêm mapping mới:
+#   "tên gọi viết thường": "@username_tiktok"
+# Có thể thêm nhiều alias cho cùng một @username.
+
+mappings:
+  "review mẫu": "@Review Mẫu"
+  "BS A": "@BS A review"
+  "Profile A" : "@ProfileA"
+  "demo user 1" : "@demo_user1"
+  "demo user 2" : "@demo_user2"

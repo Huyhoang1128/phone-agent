@@ -1,0 +1,22 @@
+# Những thứ Docker KHÔNG được copy vào build context.
+#
+# VÌ SAO CẦN: Dockerfile chạy `npm install` (cài node_modules sạch trong image) rồi mới
+# `COPY . .`. Không có file này, dòng COPY đó GHI ĐÈ node_modules vừa cài bằng 364MB
+# node_modules của máy host — vừa vứt công npm install, vừa bắt Docker đọc/ghi ~1GB cho
+# một sửa đổi 2 dòng .tsx. Đó là cú nghẽn I/O làm cả máy đứng hình.
+#
+# Context: 371MB → ~4MB.
+node_modules
+dist
+
+# Bản build cũ / log / file tạm — không liên quan tới image
+.git
+.gitignore
+*.log
+.DS_Store
+.vscode
+.idea
+
+# .env chứa key (VITE_* được truyền vào qua build args trong compose, không qua file)
+.env
+.env.*

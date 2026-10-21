@@ -1,0 +1,478 @@
+services:
+  db:
+    image: postgres:18.3
+    restart: always
+    # Raise max connections: many services each open their own psycopg pool
+    # against this DB; the default 100 was being exhausted under load.
+    command: postgres -c max_connections=300
+    environment:
+      POSTGRES_DB: ${DB_NAME:-mbcontrol}
+      POSTGRES_USER: ${DB_USER:-mbcontrol}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-mbcontrol}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      
+    ports:
+      - "5441:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-mbcontrol}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  coturn:
+    image: coturn/coturn:latest
+    restart: always
+    # network_mode: host lets coturn bind directly to the host's public IP for
+    # both control ports (3478 / 5349) and the UDP relay port range without
+    # requiring Docker to map thousands of ports.  Clients (browsers, Android
+    # devices) connect to the host's public IP; coturn relays WebRTC media when
+    # direct peer-to-peer is blocked by CGNAT (4G / 5G networks).
+    network_mode: host
+    environment:
+      TURN_REALM: ${TURN_REALM:-turn.example.com}
+      TURN_USERNAME: ${TURN_USERNAME:-turnuser}
+      TURN_PASSWORD: ${TURN_PASSWORD}
+      TURN_EXTERNAL_IP: ${TURN_EXTERNAL_IP:-localhost}
+      TURN_MIN_PORT: ${TURN_MIN_PORT:-49152}
+      TURN_MAX_PORT: ${TURN_MAX_PORT:-49200}
+
+  backend:
+    build:
+      context: ./mobile-control
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DB_NAME: ${DB_NAME:-mbcontrol}
+      DB_USER: ${DB_USER:-mbcontrol}
+      DB_PASSWORD: ${DB_PASSWORD:-mbcontrol}
+      DB_HOST: db
+      DB_PORT: 5432
+      DATABASE_URL: postgresql://${DB_USER:-mbcontrol}:${DB_PASSWORD:-mbcontrol}@db:5432/${DB_NAME:-mbcontrol}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-change-me-in-production}
+      DEBUG: ${DEBUG:-True}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0,api.example.com,app.example.com,phone.example.com}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:9094}
+      KAFKA_DEVICE_EVENTS_TOPIC: ${KAFKA_DEVICE_EVENTS_TOPIC:-device-events}
+      # Chatbot TikTok (TCS-v1+v2) — workflow engine + worker Kafka topics.
+      # Prod KHÔNG dùng prefix `dev-` (khác docker-compose.dev.yml).
+      KAFKA_COMMANDS_TOPIC: ${KAFKA_COMMANDS_TOPIC:-device-commands}
+      KAFKA_TASK_STATUS_TOPIC: ${KAFKA_TASK_STATUS_TOPIC:-task_status}
+      KAFKA_TASK_EXECUTION_TOPIC: ${KAFKA_TASK_EXECUTION_TOPIC:-task_execution}
+      KAFKA_TASK_ERROR_TOPIC: ${KAFKA_TASK_ERROR_TOPIC:-task_errors}
+      KAFKA_TASK_TOPIC: ${KAFKA_TASK_TOPIC:-task_execution}
+      # Dedicated render-request topic (only the video worker consumes it) so
+      # device workers on task_execution never grab/fail render jobs.
+      KAFKA_GENERATE_VIDEO_TOPIC: ${KAFKA_GENERATE_VIDEO_TOPIC:-generate-video}
+      KAFKA_DEVICE_COMMANDS_TOPIC: ${KAFKA_DEVICE_COMMANDS_TOPIC:-device-commands}
+      # Shared secret n8n dùng để POST callback `/api/internal/n8n-notify-callback/`.
+      # n8n HTTP Request node set `Authorization: Bearer <N8N_CALLBACK_TOKEN>`.
+      # PROD: SET QUA .env trên server (KHÔNG hardcoded default ở đây).
+      N8N_CALLBACK_TOKEN: ${N8N_CALLBACK_TOKEN}
+      # TCS-v2.5: bypass inline matcher dispatch, chỉ n8n bridge fire trigger.
+      TIKTOK_USE_N8N_BRIDGE_DISPATCH: ${TIKTOK_USE_N8N_BRIDGE_DISPATCH:-true}
+      # Bypass LLM buffer scorer: flush ngay mỗi tin.
+      CHATBOT_BUFFER_DISABLE_SCORING: ${CHATBOT_BUFFER_DISABLE_SCORING:-true}
+      # n8n webhook forward TikTok notification (firehose classifier).
+      N8N_TIKTOK_CHAT_WEBHOOK_URL: ${N8N_TIKTOK_CHAT_WEBHOOK_URL}
+      N8N_TIKTOK_CHAT_WEBHOOK_METHOD: ${N8N_TIKTOK_CHAT_WEBHOOK_METHOD:-POST}
+      WEBRTC_ICE_SERVERS: '[{"urls":["stun:stun.l.google.com:19302"]},{"urls":["turn:${TURN_EXTERNAL_IP:-localhost}:3478"],"username":"${TURN_USERNAME:-turnuser}","credential":"${TURN_PASSWORD}"},{"urls":["turns:${TURN_EXTERNAL_IP:-localhost}:5349"],"username":"${TURN_USERNAME:-turnuser}","credential":"${TURN_PASSWORD}"}]'
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # fal.ai — Seedream v4.5 + Grok Imagine cho luồng "Tạo ảnh nhanh" (content.fal_utils)
+      FAL_KEY: ${FAL_KEY}
+      # Key AI RIÊNG THEO CÔNG TY — mỗi công ty tự trả tiền bằng key của mình, sao kê
+      # tách được (xem content/ai_tenant.py). Cú pháp: 'slug:key,slug2:key2'. GỘP mọi
+      # công ty vào MỘT biến là có chủ đích: compose ở đây liệt kê từng biến một nên
+      # thêm biến mới lại phải sửa compose — cách này thêm công ty chỉ cần sửa .env.
+      AI_TENANT_OPENAI_KEYS: ${AI_TENANT_OPENAI_KEYS:-}
+      AI_TENANT_FAL_KEYS: ${AI_TENANT_FAL_KEYS:-}
+      # INFO để thấy log chọn key theo công ty + prompt cuối + thời gian sinh ảnh.
+      # Đặt WARNING nếu quá nhiều dòng (log INFO in cả prompt đầy đủ, khá dài).
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # FaceFusion face-swap — chạy server riêng. KHÔNG để default cứng: dev dùng LAN,
+      # server prod đi WAN nên địa chỉ khác nhau → mỗi môi trường tự set trong .env.
+      FACEFUSION_API_URL: ${FACEFUSION_API_URL}
+      FACEFUSION_API_KEY: ${FACEFUSION_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      # Drive folder expansion for FB scheduled-post CSV/Sheet import.
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      # Fallback đọc Drive/Sheet PRIVATE (share cho email service account thay
+      # vì public). File JSON đặt tại mobile-control/secrets/ (đã gitignore,
+      # mount sẵn qua ./mobile-control:/app). Thiếu file → fallback tự tắt.
+      GOOGLE_SERVICE_ACCOUNT_FILE: ${GOOGLE_SERVICE_ACCOUNT_FILE:-/app/secrets/google-service-account.json}
+      AGENT_TEAMS_URL: ${AGENT_TEAMS_URL:-http://agent_teams:7777}
+      # Cloudfly S3-compatible object storage for APK uploads.
+      CLOUDFLY_ENABLED: ${CLOUDFLY_ENABLED:-True}
+      CLOUDFLY_ACCESS_KEY: ${CLOUDFLY_ACCESS_KEY}
+      CLOUDFLY_SECRET_KEY: ${CLOUDFLY_SECRET_KEY}
+      CLOUDFLY_BUCKET: ${CLOUDFLY_BUCKET:-your-bucket}
+      CLOUDFLY_S3_ENDPOINT: ${CLOUDFLY_S3_ENDPOINT:-https://s3.cloudfly.vn}
+      CLOUDFLY_REGION: ${CLOUDFLY_REGION:-us-east-1}
+      # Shared secret the device worker uses for the app-installation callback.
+      # The worker container MUST use the same value as its WORKER_CALLBACK_TOKEN.
+      WORKER_CALLBACK_TOKEN: ${WORKER_CALLBACK_TOKEN}
+      # n8n webhook URL for the "Gen Content" AI flow (proxied server-side).
+      N8N_GENERATE_SCRIPTS_URL: ${N8N_GENERATE_SCRIPTS_URL:-https://n8n.example.com/webhook/generate-scripts}
+      # Inpaint (xóa chữ) chạy SERVER RIÊNG — service inpaint riêng
+      # (KHÔNG build trong compose này; image torch/easyocr build lâu). Override qua .env.
+      INPAINT_API_URL: ${INPAINT_API_URL:-http://localhost:8022}
+      # Làm nét / phóng to ảnh (Real-ESRGAN) chạy SERVER RIÊNG CÓ GPU — repo:
+      # service upscale riêng (cũng KHÔNG build trong compose này:
+      # image nền CUDA rất nặng, và host chạy compose này chưa chắc có GPU).
+      UPSCALE_API_URL: ${UPSCALE_API_URL:-http://localhost:8027}
+      # "Tạo nhân vật": OpenAI image model (server-side) — sinh ảnh trực tiếp, không dùng face-swap ngoài.
+      OPENAI_IMAGE_MODEL: ${OPENAI_IMAGE_MODEL:-gpt-image-2}
+      # Image quality (low|medium|high). 'low' is ~15x cheaper than 'high'.
+      OPENAI_IMAGE_QUALITY: ${OPENAI_IMAGE_QUALITY:-low}
+      # Chống treo hệ thống: timeout call OpenAI + giới hạn sinh ảnh đồng thời/worker.
+      OPENAI_IMAGE_TIMEOUT: ${OPENAI_IMAGE_TIMEOUT:-120}
+      OPENAI_TEXT_TIMEOUT: ${OPENAI_TEXT_TIMEOUT:-60}
+      IMAGE_GEN_CONCURRENCY: ${IMAGE_GEN_CONCURRENCY:-4}
+      # Crawl API host for TikTok data-scraping endpoints.
+      API_CRAWL_HOST: ${API_CRAWL_HOST:-localhost}
+      # SeaweedFS configuration for Facebook media
+      SEAWEEDFS_ACCESS_KEY: ${SEAWEEDFS_ACCESS_KEY:-admin}
+      SEAWEEDFS_SECRET_KEY: ${SEAWEEDFS_SECRET_KEY:-secret}
+      SEAWEEDFS_BUCKET: ${SEAWEEDFS_BUCKET:-user-media}
+      SEAWEEDFS_S3_ENDPOINT: ${SEAWEEDFS_S3_ENDPOINT:-http://localhost:8333}
+      SEAWEEDFS_PUBLIC_BASE_URL: ${SEAWEEDFS_PUBLIC_BASE_URL:-http://localhost:8888/buckets/user-media}
+      # Ảnh media serve qua backend proxy (/api/media) khi host công khai chết. Dùng
+      # '-' (KHÔNG ':') để .env đặt RỖNG (MEDIA_PROXY_BASE_URL=) là TẮT proxy → ảnh về
+      # thẳng media.example.com; bỏ dòng trong .env = default (bật). ':' coi rỗng như chưa
+      # set nên KHÔNG tắt được.
+      MEDIA_PROXY_BASE_URL: ${MEDIA_PROXY_BASE_URL-https://api.example.com}
+      # Guardrails so CSV/Sheet imports with many media files cannot exhaust
+      # the backend container.
+      FB_MEDIA_MAX_BYTES: ${FB_MEDIA_MAX_BYTES:-524288000}
+      FB_CSV_IMPORT_MAX_CONCURRENT_REQUESTS: ${FB_CSV_IMPORT_MAX_CONCURRENT_REQUESTS:-1}
+      FB_CSV_IMPORT_MAX_ROWS: ${FB_CSV_IMPORT_MAX_ROWS:-300}
+      FB_CSV_IMPORT_MAX_MEDIA_REFS: ${FB_CSV_IMPORT_MAX_MEDIA_REFS:-300}
+      FB_CSV_IMPORT_MAX_EXPANDED_MEDIA: ${FB_CSV_IMPORT_MAX_EXPANDED_MEDIA:-300}
+      FB_CSV_IMPORT_EXPAND_WORKERS: ${FB_CSV_IMPORT_EXPAND_WORKERS:-3}
+      FB_CSV_IMPORT_UPLOAD_WORKERS: ${FB_CSV_IMPORT_UPLOAD_WORKERS:-3}
+
+    volumes:
+      - ./mobile-control:/app
+    cpus: ${BACKEND_CPUS:-4.0}
+    mem_limit: ${BACKEND_MEM_LIMIT:-10g}
+    mem_reservation: ${BACKEND_MEM_RESERVATION:-3g}
+    ports:
+      - "8030:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python manage.py check --database default 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    command: >
+      sh -c "python manage.py collectstatic --noinput &&
+             python manage.py migrate &&
+             gunicorn mbcontrol.asgi:application -k uvicorn.workers.UvicornWorker --workers ${WEB_CONCURRENCY:-8} --bind 0.0.0.0:8000 --timeout 300 --graceful-timeout 30 --access-logfile - --error-logfile -"
+
+  scheduler:
+    build:
+      context: ./mobile-control
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DB_NAME: ${DB_NAME:-mbcontrol}
+      DB_USER: ${DB_USER:-mbcontrol}
+      DB_PASSWORD: ${DB_PASSWORD:-mbcontrol}
+      DB_HOST: db
+      DB_PORT: 5432
+      DATABASE_URL: postgresql://${DB_USER:-mbcontrol}:${DB_PASSWORD:-mbcontrol}@db:5432/${DB_NAME:-mbcontrol}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-change-me-in-production}
+      DEBUG: ${DEBUG:-True}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,api.example.com,app.example.com,phone.example.com}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # fal.ai — Seedream v4.5 + Grok Imagine cho luồng "Tạo ảnh nhanh" (content.fal_utils)
+      FAL_KEY: ${FAL_KEY}
+      # Key AI RIÊNG THEO CÔNG TY — mỗi công ty tự trả tiền bằng key của mình, sao kê
+      # tách được (xem content/ai_tenant.py). Cú pháp: 'slug:key,slug2:key2'. GỘP mọi
+      # công ty vào MỘT biến là có chủ đích: compose ở đây liệt kê từng biến một nên
+      # thêm biến mới lại phải sửa compose — cách này thêm công ty chỉ cần sửa .env.
+      AI_TENANT_OPENAI_KEYS: ${AI_TENANT_OPENAI_KEYS:-}
+      AI_TENANT_FAL_KEYS: ${AI_TENANT_FAL_KEYS:-}
+      # INFO để thấy log chọn key theo công ty + prompt cuối + thời gian sinh ảnh.
+      # Đặt WARNING nếu quá nhiều dòng (log INFO in cả prompt đầy đủ, khá dài).
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # FaceFusion face-swap — chạy server riêng. KHÔNG để default cứng: dev dùng LAN,
+      # server prod đi WAN nên địa chỉ khác nhau → mỗi môi trường tự set trong .env.
+      FACEFUSION_API_URL: ${FACEFUSION_API_URL}
+      FACEFUSION_API_KEY: ${FACEFUSION_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      # Crawl API host for TikTok data-scraping endpoints.
+      API_CRAWL_HOST: ${API_CRAWL_HOST:-localhost}
+      # Cloudfly S3 creds — the scheduler dispatches due posts and presigns their
+      # S3 media URLs. Without these the boto3 client signs with an EMPTY access
+      # key, producing a broken presigned URL → worker gets HTTP 400 → scheduled
+      # posts fail. Must match the backend service.
+      CLOUDFLY_ENABLED: ${CLOUDFLY_ENABLED:-True}
+      CLOUDFLY_ACCESS_KEY: ${CLOUDFLY_ACCESS_KEY}
+      CLOUDFLY_SECRET_KEY: ${CLOUDFLY_SECRET_KEY}
+      CLOUDFLY_BUCKET: ${CLOUDFLY_BUCKET:-your-bucket}
+      CLOUDFLY_S3_ENDPOINT: ${CLOUDFLY_S3_ENDPOINT:-https://s3.cloudfly.vn}
+      CLOUDFLY_REGION: ${CLOUDFLY_REGION:-us-east-1}
+      # SeaweedFS configuration for Facebook media
+      SEAWEEDFS_ACCESS_KEY: ${SEAWEEDFS_ACCESS_KEY:-admin}
+      SEAWEEDFS_SECRET_KEY: ${SEAWEEDFS_SECRET_KEY:-secret}
+      SEAWEEDFS_BUCKET: ${SEAWEEDFS_BUCKET:-user-media}
+      SEAWEEDFS_S3_ENDPOINT: ${SEAWEEDFS_S3_ENDPOINT:-http://localhost:8333}
+      SEAWEEDFS_PUBLIC_BASE_URL: ${SEAWEEDFS_PUBLIC_BASE_URL:-http://localhost:8888/buckets/user-media}
+      # Ảnh media serve qua backend proxy (/api/media) khi host công khai chết. Dùng
+      # '-' (KHÔNG ':') để .env đặt RỖNG (MEDIA_PROXY_BASE_URL=) là TẮT proxy → ảnh về
+      # thẳng media.example.com; bỏ dòng trong .env = default (bật). ':' coi rỗng như chưa
+      # set nên KHÔNG tắt được.
+      MEDIA_PROXY_BASE_URL: ${MEDIA_PROXY_BASE_URL-https://api.example.com}
+      # Drive folder listing during lazy media re-host. CSV import stores raw
+      # Drive URLs and the scheduler re-hosts them at publish time, so the key
+      # must be set HERE too (not just `backend`), else folder expansion fails.
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      # Private-Drive fallback cũng cần ở scheduler (publish-time re-host).
+      GOOGLE_SERVICE_ACCOUNT_FILE: ${GOOGLE_SERVICE_ACCOUNT_FILE:-/app/secrets/google-service-account.json}
+    volumes:
+      - ./mobile-control:/app
+    command: python manage.py run_scheduler
+
+  # Always-on Kafka consumer: turns video-agent-worker task_status messages into
+  # ContentScenario render results (video_url / status), polled by the FE.
+  video-status-consumer:
+    build:
+      context: ./mobile-control
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-mbcontrol}:${DB_PASSWORD:-mbcontrol}@db:5432/${DB_NAME:-mbcontrol}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-change-me-in-production}
+      DEBUG: ${DEBUG:-True}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:9094}
+      KAFKA_TASK_STATUS_TOPIC: ${KAFKA_TASK_STATUS_TOPIC:-task_status}
+      # Unique per environment — isolates this env's committed offsets (partition
+      # coverage is handled by manual assignment, not by the group_id).
+      KAFKA_VIDEO_STATUS_GROUP_ID: ${KAFKA_VIDEO_STATUS_GROUP_ID:-video-status-consumer-prod}
+      # Flush stdout immediately so `docker logs` shows the consumer's startup
+      # line ("assigned N partitions") and per-message logs in real time.
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./mobile-control:/app
+    command: python manage.py consume_video_status
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Chatbot TikTok (TCS-v1 + v2) — 4 worker process tách container riêng
+  # vì là long-running consumer (XREADGROUP / KafkaConsumer / cron loop).
+  # Xem docs/Chatbot_Tiktok/architecture_4_workers.md.
+  # ────────────────────────────────────────────────────────────────────────
+
+  # workflow_runner:
+  #   build:
+  #     context: ./mobile-control
+  #   restart: always
+  #   depends_on:
+  #     backend:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   environment:
+  #     DATABASE_URL: postgresql://${DB_USER:-mbcontrol}:${DB_PASSWORD:-mbcontrol}@db:5432/${DB_NAME:-mbcontrol}
+  #     DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-change-me-in-production}
+  #     DEBUG: ${DEBUG:-True}
+  #     ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+  #     REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  #     KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:9094}
+  #     KAFKA_TASK_EXECUTION_TOPIC: ${KAFKA_TASK_EXECUTION_TOPIC:-task_execution}
+  #     KAFKA_TASK_STATUS_TOPIC: ${KAFKA_TASK_STATUS_TOPIC:-task_status}
+  #     KAFKA_TASK_TOPIC: ${KAFKA_TASK_TOPIC:-task_execution}
+  #     OPENAI_API_KEY: ${OPENAI_API_KEY}
+  #   volumes:
+  #     - ./mobile-control:/app
+  #   command: python manage.py run_workflow_runner
+
+  kafka_task_status_listener:
+    build:
+      context: ./mobile-control
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-mbcontrol}:${DB_PASSWORD:-mbcontrol}@db:5432/${DB_NAME:-mbcontrol}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-change-me-in-production}
+      DEBUG: ${DEBUG:-True}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:9094}
+      KAFKA_TASK_STATUS_TOPIC: ${KAFKA_TASK_STATUS_TOPIC:-task_status}
+    volumes:
+      - ./mobile-control:/app
+    command: python manage.py run_kafka_task_status_listener
+
+  # workflow_dlq_handler:
+  #   build:
+  #     context: ./mobile-control
+  #   restart: always
+  #   depends_on:
+  #     backend:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   environment:
+  #     DATABASE_URL: postgresql://${DB_USER:-mbcontrol}:${DB_PASSWORD:-mbcontrol}@db:5432/${DB_NAME:-mbcontrol}
+  #     DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-change-me-in-production}
+  #     DEBUG: ${DEBUG:-True}
+  #     ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+  #     REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  #   volumes:
+  #     - ./mobile-control:/app
+  #   command: python manage.py run_workflow_dlq_handler
+
+  # TCS-v2 Sprint 3 (#3): reconcile TiktokMessage rows stuck delivery_status=pending
+  # khi Kafka task_status mất/parse fail. Default scan 5 phút, threshold 10 phút.
+
+  # chatbot_pending_sweeper:
+  #   build:
+  #     context: ./mobile-control
+  #   restart: always
+  #   depends_on:
+  #     backend:
+  #       condition: service_healthy
+  #   environment:
+  #     DATABASE_URL: postgresql://${DB_USER:-mbcontrol}:${DB_PASSWORD:-mbcontrol}@db:5432/${DB_NAME:-mbcontrol}
+  #     DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-change-me-in-production}
+  #     DEBUG: ${DEBUG:-True}
+  #     ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+  #   volumes:
+  #     - ./mobile-control:/app
+  #   command: python manage.py run_stale_pending_sweeper --interval 300 --age-minutes 10
+
+  frontend:
+    build:
+      context: ./ui
+      args:
+        VITE_API_URL: ${VITE_API_URL:-https://api.example.com}
+        VITE_AGENT_TEAMS_URL: ${VITE_AGENT_TEAMS_URL:-https://api.example.com:7777}
+        VITE_PEXELS_API_KEY: ${VITE_PEXELS_API_KEY:-}
+    restart: always
+    ports:
+      - "5173:80"
+
+  devices_worker:
+    build:
+      context: ./devices_worker
+    restart: always
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:9094}
+      KAFKA_DEVICE_EVENTS_TOPIC: ${KAFKA_DEVICE_EVENTS_TOPIC:-device-events}
+      KAFKA_COMMANDS_TOPIC: ${KAFKA_COMMANDS_TOPIC:-device-commands}
+      KAFKA_TASK_STATUS_TOPIC: ${KAFKA_TASK_STATUS_TOPIC:-task_status}
+      KAFKA_DEVICES_WORKER_GROUP: ${KAFKA_DEVICES_WORKER_GROUP:-devices-worker}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      DATABASE_URL: postgresql://${DB_USER:-mbcontrol}:${DB_PASSWORD:-mbcontrol}@db:5432/${DB_NAME:-mbcontrol}
+
+  # agent_teams_db:
+  #   image: agnohq/pgvector:18
+  #   restart: always
+  #   environment:
+  #     POSTGRES_DB: ${AGENT_DB_NAME:-agentdb}
+  #     POSTGRES_USER: ${AGENT_DB_USER:-agentdb}
+  #     POSTGRES_PASSWORD: ${AGENT_DB_PASSWORD:-agentdb}
+  #   volumes:
+  #     - agent_teams_postgres_data:/var/lib/postgresql
+  #   ports:
+  #     - "5532:5432"
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${AGENT_DB_USER:-agentdb}"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+  # agent_teams:
+  #   build:
+  #     context: ./agent-teams
+  #   restart: always
+  #   depends_on:
+  #     agent_teams_db:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   environment:
+  #     DATABASE_URL: postgresql+psycopg://${AGENT_DB_USER:-agentdb}:${AGENT_DB_PASSWORD:-agentdb}@agent_teams_db:5432/${AGENT_DB_NAME:-agentdb}
+  #     DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-change-me-in-production}
+  #     OPENAI_API_KEY: ${OPENAI_API_KEY}
+  #     # v3.2.1 Option C — Gemini cho 5 reviewer (cross-family judgment).
+  #     # Set GOOGLE_API_KEY trong .env trên server prod khi muốn enable Gemini
+  #     # (cần Cloud Billing — free tier gemini-2.5-pro hiện limit=0). Để trống
+  #     # → fallback all 4 role dùng gpt-4o-mini (Option A, an toàn + rẻ).
+  #     GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+  #     # v3.2.1 Option C — per-role model override (provider:model_id).
+  #     # Default tất cả `openai:gpt-4o-mini`. Set khi muốn Hybrid/Pro:
+  #     #   SCENARIO_SCRIPTER_MODEL=openai:gpt-4o
+  #     #   SCENARIO_REVIEWER_MODEL=google:gemini-2.5-pro
+  #     # Xem agent-teams/agents/scenario/agents.py:_make_scenario_model.
+  #     SCENARIO_SCRIPTER_MODEL: ${SCENARIO_SCRIPTER_MODEL:-}
+  #     SCENARIO_REVIEWER_MODEL: ${SCENARIO_REVIEWER_MODEL:-}
+  #     SCENARIO_PARSER_MODEL: ${SCENARIO_PARSER_MODEL:-}
+  #     SCENARIO_CONSOLIDATOR_MODEL: ${SCENARIO_CONSOLIDATOR_MODEL:-}
+  #     # Legacy override (set TẤT CẢ 4 role về 1 model — backward compat v3.2):
+  #     SCENARIO_THINK_MODEL: ${SCENARIO_THINK_MODEL:-}
+  #     EXA_API_KEY: ${EXA_API_KEY:-}
+  #     PARALLEL_API_KEY: ${PARALLEL_API_KEY:-}
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #     REDIS_DB: 0
+  #     REDIS_PASSWORD: ""
+  #     RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+  #     RATE_LIMIT_FREE_DAILY: ${RATE_LIMIT_FREE_DAILY:-50}
+  #     RATE_LIMIT_PRO_DAILY: ${RATE_LIMIT_PRO_DAILY:-500}
+  #     RATE_LIMIT_ENTERPRISE_DAILY: ${RATE_LIMIT_ENTERPRISE_DAILY:-5000}
+  #     RATE_LIMIT_DEFAULT_DAILY: ${RATE_LIMIT_DEFAULT_DAILY:-100}
+  #     AGENT_TEAMS_CORS_ORIGINS: ${AGENT_TEAMS_CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost,https://api.example.com,http://api.example.com,http://app.example.com,https://app.example.com}
+  #   volumes:
+  #     - ./agent-teams:/app
+  #   ports:
+  #     - "7777:7777"
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:7777/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     start_period: 120s
+  #     retries: 3
+
+volumes:
+  postgres_data:
+  redis_data:
+  agent_teams_postgres_data:
+
+
+# son

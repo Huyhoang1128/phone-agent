@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database with pgvector extension
+  postgres:
+    image: agnohq/pgvector:18
+    container_name: agno-demo-postgres
+    environment:
+      POSTGRES_USER: ai
+      POSTGRES_PASSWORD: ai
+      POSTGRES_DB: ai
+    ports:
+      - "5532:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai -d ai"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - agno-demo-network
+
+  # Redis – used for per-user rate-limit counters and plan caching
+  redis:
+    image: redis:7-alpine
+    container_name: agno-demo-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - agno-demo-network
+
+  # Agno Demo Application
+  agno-demo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agno-demo-app
+    environment:
+      DATABASE_URL: postgresql+psycopg://ai:ai@postgres:5432/ai
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      EXA_API_KEY: ${EXA_API_KEY:-}
+      ENABLE_INIT: "true"
+      # Redis connection for rate limiting
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      # Leave REDIS_PASSWORD blank for unauthenticated connections (local dev).
+      # Set a real password here for production deployments.
+      REDIS_PASSWORD: ""
+      # Rate-limit feature flag (set to "false" to disable globally)
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      # Per-plan daily limits (override via environment as needed)
+      RATE_LIMIT_FREE_DAILY: ${RATE_LIMIT_FREE_DAILY:-50}
+      RATE_LIMIT_PRO_DAILY: ${RATE_LIMIT_PRO_DAILY:-500}
+      RATE_LIMIT_ENTERPRISE_DAILY: ${RATE_LIMIT_ENTERPRISE_DAILY:-5000}
+      RATE_LIMIT_DEFAULT_DAILY: ${RATE_LIMIT_DEFAULT_DAILY:-100}
+    ports:
+      - "7777:7777"
+    volumes:
+      # Mount the project for live code updates (optional)
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7777/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+    networks:
+      - agno-demo-network
+
+volumes:
+  postgres_data:
+
+networks:
+  agno-demo-network:
+    driver: bridge

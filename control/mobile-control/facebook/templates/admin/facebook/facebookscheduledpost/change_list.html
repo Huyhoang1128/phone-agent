@@ -1,0 +1,13 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools-items %}
+    {{ block.super }}
+    {% if show_cleanup_link %}
+        <li>
+            <a href="{{ cleanup_url }}" class="addlink"
+               style="background: #b00; color: #fff;">
+                🗑 Dọn S3 — bài đã đăng (TẤT CẢ user)
+            </a>
+        </li>
+    {% endif %}
+{% endblock %}

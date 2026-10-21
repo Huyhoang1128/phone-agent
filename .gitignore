@@ -1,0 +1,25 @@
+# Bí mật — không bao giờ commit
+.env
+.env.*
+!.env.example
+**/secrets/*
+!**/secrets/.gitkeep
+*.pem
+*.key
+**/profile_mapping.yaml
+**/credentials.yaml
+**/config.yaml.local
+
+# Python / Node
+__pycache__/
+*.pyc
+.venv/
+venv/
+node_modules/
+dist/
+
+# Dữ liệu chạy local
+*.sqlite3
+media/
+worker/downloads/*
+!worker/downloads/.gitkeep

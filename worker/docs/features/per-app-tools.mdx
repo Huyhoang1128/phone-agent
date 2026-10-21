@@ -1,0 +1,222 @@
+---
+title: 'Per-App Tools & Skills'
+description: 'Define custom tools and markdown skill guides per app in the apps/ directory — automatically loaded when the agent works with that app'
+---
+
+## Overview
+
+The **per-app tools & skills** system lets you ship app-specific automation logic alongside your code.
+Each app gets its own directory under `apps/` containing tools, skill guides, and optional metadata.
+
+When you pass `app="tiktok"` to `MobileAgent`, the framework automatically discovers and loads:
+- **Tools** from `apps/tiktok/tools.py` → registered in the tool registry (callable by the executor)
+- **Skill guides** from `apps/tiktok/skills/*.md` → injected into the Manager's system prompt (used for planning)
+
+---
+
+## Directory Structure
+
+```
+apps/
+└── tiktok/                    # one directory per app
+    ├── __init__.py
+    ├── metadata.yaml           # package name, description
+    ├── tools.py                # exports TOOLS dict — callable Python functions
+    └── skills/                 # markdown skill guides for the Manager
+        ├── post_comment.md
+        ├── like_video.md
+        └── follow_creator.md
+```
+
+### `metadata.yaml`
+
+```yaml
+package_name: com.zhiliaoapp.musically
+description: TikTok short-video social app
+display_name: TikTok
+```
+
+The `package_name` field enables auto-discovery by Android package name (future use).
+
+---
+
+## Tools (`tools.py`)
+
+Tools are atomic, single-purpose Python functions registered in the executor's tool registry.
+Identical format to [Custom Tools](/features/custom-tools):
+
+```python
+async def open_comment_section(*, ctx, **kwargs) -> str:
+    """Open the TikTok comment section."""
+    ui_state = await ctx.state_provider.get_state()
+    elements = ui_state.elements if ui_state else []
+    ...
+    return "Comment section opened successfully"
+
+TOOLS = {
+    "tiktok_open_comment_section": {
+        "parameters": {},
+        "description": "Open the comment section on the current TikTok video.",
+        "function": open_comment_section,
+    },
+}
+```
+
+---
+
+## Skill Guides (`skills/*.md`)
+
+Skills are **markdown files** that describe how to combine multiple tools to accomplish a goal.
+They are loaded as plain text and injected into the **Manager's** system prompt under a
+`<skill_guides>` section, giving the Manager structured step-by-step planning guidance.
+
+### Format
+
+Each skill file should contain:
+- A clear **title and goal**
+- The **tools required**
+- Numbered **steps** explaining the exact sequence of tool calls
+- An **error recovery** table for common failure cases
+- Any **notes** about app quirks
+
+### Example: `skills/post_comment.md`
+
+```markdown
+# Skill: Post a Comment on TikTok
+
+## Goal
+Post a text comment on the currently displayed TikTok video.
+
+## Tools Required
+- `tiktok_open_comment_section` — opens the comment drawer
+- `tiktok_dismiss_popup` — dismisses any blocking popup or ad
+- `tiktok_type_comment` — types the comment text
+- `tiktok_post_comment` — taps the Post/Send button
+
+## Steps
+
+1. **Check for blocking overlay first**
+   - If an ad or popup is visible, call `tiktok_dismiss_popup` first.
+
+2. **Open the comment section**
+   - Call `tiktok_open_comment_section`.
+   - On failure, check the UI snapshot in the error message and handle the obstacle.
+
+3. **Type the comment**
+   - Call `tiktok_type_comment` with the comment text.
+
+4. **Submit**
+   - Call `tiktok_post_comment`.
+
+## Error Recovery
+
+| Failure | Recovery |
+|---------|---------|
+| ad popup visible | Call `tiktok_dismiss_popup`, then retry |
+| comment input not found | Retry `tiktok_open_comment_section` |
+```
+
+All `.md` files in `skills/` are concatenated and injected into the Manager prompt
+automatically when an app is loaded.
+
+---
+
+## Using Per-App Tools in MobileAgent
+
+Pass the `app` argument to `MobileAgent` to enable auto-loading:
+
+```python
+from mobilerun import MobileAgent, MobileConfig
+
+agent = MobileAgent(
+    goal="Post a comment 'Great video!' on the current TikTok",
+    config=MobileConfig(),
+    app="tiktok",          # loads tools.py + skills/*.md
+)
+
+result = await agent.run()
+print(result.success, result.reason)
+```
+
+### Custom apps directory
+
+```python
+agent = MobileAgent(
+    goal="...",
+    config=config,
+    app="myapp",
+    apps_dir="/path/to/my/apps",  # default: apps/ relative to cwd
+)
+```
+
+---
+
+## How Skill Guides Reach the Manager
+
+```
+apps/tiktok/skills/post_comment.md   ─┐
+apps/tiktok/skills/like_video.md     ─┤  concatenated
+apps/tiktok/skills/follow_creator.md ─┘  into one string
+
+         ↓
+shared_state.skill_guides
+
+         ↓
+Manager system prompt:
+  <skill_guides>
+    # Skill: Post a Comment on TikTok
+    ...
+    ---
+    # Skill: Like a TikTok Video
+    ...
+  </skill_guides>
+
+         ↓
+Manager uses skill steps when creating its plan
+```
+
+---
+
+## Hybrid Architecture: Tools + Skill Guides
+
+```
+Manager reads skill guide → plans using documented tool sequence
+   ↓
+Executor calls tiktok_open_comment_section → "Failed: ad popup visible. UI: [snapshot]"
+   ↓
+Executor calls tiktok_dismiss_popup → "Popup dismissed"
+   ↓
+Executor retries tiktok_open_comment_section → "Comment section opened"
+   ↓
+Executor calls tiktok_type_comment("Great video!") → "Typed comment"
+   ↓
+Executor calls tiktok_post_comment → "Comment posted successfully"
+```
+
+The Manager knows the sequence from the skill guide; each tool reports its outcome
+so the executor can recover gracefully from UI changes or blocking popups.
+
+---
+
+## Complete Example
+
+See the working TikTok example in [apps/tiktok/](../apps/tiktok/) and the
+test runner in [runmb.py](../runmb.py):
+
+```bash
+# Run with TikTok tools and skills, reasoning mode
+python runmb.py --app tiktok --reasoning \
+  --goal "Post a comment 'Hello from agent!' on the first video"
+
+# Direct FastAgent mode (faster, less planning overhead)
+python runmb.py --app tiktok \
+  --goal "Like the current TikTok video"
+```
+
+---
+
+## Related
+
+- [Custom Tools](/features/custom-tools) — single-tool format reference
+- [App Cards](/features/app-cards) — app-specific instruction guides
+- [Agent Architecture](/concepts/architecture) — how Manager and Executor work

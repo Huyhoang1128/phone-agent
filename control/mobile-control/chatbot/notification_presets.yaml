@@ -1,0 +1,86 @@
+# TikTok Notification Filter Catalog
+# ============================================================================
+# Khớp DeviceNotification.package + .title + .text với 1 preset để gán
+# `event_type` cho payload trước khi dispatch_event. WorkflowTrigger.event_filter
+# có thể chứa `{"event_type": "tiktok_dm"}` để match.
+#
+# Match order: theo `priority` ASC (số nhỏ → match trước). DM dùng priority cao
+# (99) làm fallback — nó dùng blacklist loại trừ các loại khác.
+#
+# NEGATIVE preset (`action: SKIP`): match → return None ngay → KHÔNG emit event.
+# POSITIVE preset (mặc định): match → return preset id → emit event.
+#
+# Phiên bản 0.1 — SKELETON. Phase 2.1.3 sẽ khảo sát ~122 notif thực tế trong DB
+# `devices_devicenotification` để bổ sung pattern. Xem
+# docs/Chatbot_Tiktok/design.md mục 6.
+# ============================================================================
+
+version: '0.1'
+
+presets:
+  # ==========================================================================
+  # POSITIVE PRESETS — match → emit event với id này làm event_type
+  # ==========================================================================
+
+  - id: tiktok_follow
+    name_vi: 'TikTok — Có người follow mới'
+    package_regex: '^com\.ss\.android\.ugc\.trill$'
+    title_regex: ' · Đã follow$'
+    text_regex: '^đã xem hồ sơ của bạn$'
+    priority: 10
+
+  - id: tiktok_comment_batch
+    name_vi: 'TikTok — Bình luận mới (gộp nhiều)'
+    package_regex: '^com\.ss\.android\.ugc\.trill$'
+    title_regex: '^💬 Bình luận mới$'
+    text_regex: '^Bạn có \d+ bình luận mới\.?$'
+    priority: 20
+
+  - id: tiktok_comment_single
+    name_vi: 'TikTok — Bình luận chi tiết trên video'
+    package_regex: '^com\.ss\.android\.ugc\.trill$'
+    text_regex: 'đã bình luận trên video của bạn'
+    priority: 30
+
+  - id: tiktok_dm
+    name_vi: 'TikTok — Tin nhắn mới (DM)'
+    package_regex: '^com\.ss\.android\.ugc\.trill$'
+    # DM KHÔNG có dấu hiệu đặc trưng (title = sender_name, text = preview).
+    # → Dùng blacklist loại trừ các loại marketing/system khác, fallback cuối.
+    title_blacklist:
+      - '^Moon ơi[,， ]'                # template marketing (Moon = handle bot)
+      - '^Tài khoản bạn đã '            # account/system event
+      - '^Khám phá thêm'                # discover feed push
+      - '^Đang thịnh hành'              # trending push
+      - ' · Đã follow$'                 # follow (đã match priority cao hơn)
+      - '^💬 Bình luận mới$'            # comment batch
+    text_blacklist:
+      - '^đã xem hồ sơ của bạn$'       # follow extra
+      - 'đã bình luận trên video'       # comment single
+    text_max_length: 200                # DM thường ngắn, > 200 chars khả năng cao là long-form
+    priority: 99                        # fallback cuối
+
+  # ==========================================================================
+  # NEGATIVE PRESETS — match → SKIP (return None, không emit event)
+  # ==========================================================================
+
+  - id: tiktok_marketing_recommend
+    name_vi: 'TikTok — Marketing/Recommendation (bỏ qua)'
+    package_regex: '^com\.ss\.android\.ugc\.trill$'
+    title_regex: '^Moon ơi[,， ]'       # "Moon" placeholder cho username bot
+    action: SKIP
+    priority: 5                         # match SKIP trước mọi POSITIVE
+
+  - id: tiktok_account_event
+    name_vi: 'TikTok — Account/system event (bỏ qua)'
+    package_regex: '^com\.ss\.android\.ugc\.trill$'
+    title_regex: '^Tài khoản bạn đã '
+    action: SKIP
+    priority: 5
+
+  - id: tiktok_other_push
+    name_vi: 'TikTok — Marketing push khác (bỏ qua)'
+    package_regex: '^com\.ss\.android\.ugc\.trill$'
+    title_regex: '^(Khám phá thêm|Đang thịnh hành|Có gì hot)'
+    action: SKIP
+    priority: 5

@@ -1,0 +1,8 @@
+data/
+workspace/
+*.db
+__pycache__/
+.DS_Store
+# Windows-reserved filename — sometimes auto-created by stdout redirection
+# bugs on Windows hosts. Cannot be removed via normal git operations.
+nul

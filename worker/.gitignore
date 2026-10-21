@@ -1,0 +1,19 @@
+.env
+apps/facebook/profile_mapping.yaml
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+script_test/
+downloads/*
+docs/nam/*
+# TCS-v1 Worker (failure_log.py) — failure logs runtime per-task.
+# Format: logs/failures/task_{id}_{ts}_{outcome}.log. KHÔNG commit data.
+logs/

@@ -1,0 +1,4 @@
+faststream[kafka,cli]>=0.5,<0.6
+redis>=5.0,<6.0
+python-dotenv>=1.0
+psycopg[binary]>=3.1,<4.0

@@ -1,0 +1,1777 @@
+{
+  "name": "share_video",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        432,
+        -80
+      ],
+      "id": "683127ad-9e43-467e-ad3b-4c378df98ae4",
+      "name": "Wait",
+      "webhookId": "a2199a56-a431-4bc3-95cd-26f967c8ec33"
+    },
+    {
+      "parameters": {
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/screen-state",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        656,
+        -80
+      ],
+      "id": "c0bc5f55-8870-467d-b592-44de9635e6b2",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "5a79924a-4537-4bf7-b35c-9c6e295251fa",
+              "name": "device_id",
+              "value": "={{ $json.device_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -3152,
+        -80
+      ],
+      "id": "401683d8-1e0b-47af-994f-2916966e47ae",
+      "name": "device_id"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lấy toàn bộ dữ liệu JSON từ item đầu tiên\nconst data = $input.first().json;\n\n// Tìm phần tử trong mảng 'elements' có chứa text là \"DCIM\"\nconst dcimElement = data.elements.find(el => el.text === \"DCIM\");\n\n// Kiểm tra xem có tìm thấy phần tử hay không\nif (dcimElement && dcimElement.center) {\n  // Trả về tọa độ x và y\n  return {\n    json: {\n      text: dcimElement.text,\n      found: true,\n      x: dcimElement.center.x,\n      y: dcimElement.center.y\n    }\n  };\n} else {\n  // Trả về thông báo lỗi nếu không tìm thấy\n  return {\n    json: {\n      found: false,\n      error: \"Không tìm thấy nút DCIM trong danh sách elements.\"\n    }\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        -80
+      ],
+      "id": "8aef9f08-3930-4997-82c0-139beea96b87",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/tap",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "x",
+              "value": "={{ $json.x }}"
+            },
+            {
+              "name": "y",
+              "value": "={{ $json.y }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1072,
+        -80
+      ],
+      "id": "cb765ede-50c1-467b-8d9d-02c42c1ccb48",
+      "name": "HTTP Request2"
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1280,
+        -80
+      ],
+      "id": "9f1b0146-6bad-419c-af98-20163869dcf6",
+      "name": "Wait1",
+      "webhookId": "8516851e-4f25-47ae-b8f0-89b2a3acb987"
+    },
+    {
+      "parameters": {
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/screen-state",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1504,
+        -80
+      ],
+      "id": "acd11c37-54bc-4405-a8a5-de7bd28520e6",
+      "name": "HTTP Request3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/tap",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "x",
+              "value": "={{ $json.x }}"
+            },
+            {
+              "name": "y",
+              "value": "={{ $json.y }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1936,
+        -80
+      ],
+      "id": "3271dcb0-dc63-44ef-b0c4-7c687a8d8d57",
+      "name": "HTTP Request4"
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2160,
+        -80
+      ],
+      "id": "cb067052-4d39-42ac-afe7-d6086f168a0d",
+      "name": "Wait2",
+      "webhookId": "8516851e-4f25-47ae-b8f0-89b2a3acb987"
+    },
+    {
+      "parameters": {
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/screen-state",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -416,
+        336
+      ],
+      "id": "7a7283e5-209f-4580-a9fd-48c6d21149d2",
+      "name": "HTTP Request5"
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        320
+      ],
+      "id": "b645b522-341c-4386-988c-d873bc398ec6",
+      "name": "Wait3",
+      "webhookId": "24a7cf26-820d-47af-9f5d-100883064ea5"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/tap",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "x",
+              "value": "={{ $json.x }}"
+            },
+            {
+              "name": "y",
+              "value": "={{ $json.y }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1424,
+        336
+      ],
+      "id": "191191d0-99a2-4110-b5b9-18bdcc05cddf",
+      "name": "HTTP Request8"
+    },
+    {
+      "parameters": {
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/screen-state",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1040,
+        336
+      ],
+      "id": "c5af0b79-b258-47da-9cbe-48690c601f56",
+      "name": "screen_state"
+    },
+    {
+      "parameters": {
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/screen-state",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1936,
+        352
+      ],
+      "id": "3711b7bb-ec5a-4ec0-a32c-6f7d91f1f27a",
+      "name": "screen_state1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1728,
+        352
+      ],
+      "id": "57fa2a62-0f5c-47b9-b4d0-09d25e2a95c6",
+      "name": "Wait4",
+      "webhookId": "559b0254-f24f-4bba-a9ed-839711737c01"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lấy toàn bộ dữ liệu JSON từ item đầu tiên\nconst data = $input.first().json;\n\n// Tìm phần tử trong mảng 'elements' có chứa text là \"DCIM\"\nconst dcimElement = data.elements.find(el => el.text === \"Video\");\n\n// Kiểm tra xem có tìm thấy phần tử hay không\nif (dcimElement && dcimElement.center) {\n  // Trả về tọa độ x và y\n  return {\n    json: {\n      text: dcimElement.text,\n      found: true,\n      x: dcimElement.center.x,\n      y: dcimElement.center.y\n    }\n  };\n} else {\n  // Trả về thông báo lỗi nếu không tìm thấy\n  return {\n    json: {\n      found: false,\n      error: \"Không tìm thấy nút Tiktok trong danh sách elements.\"\n    }\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        352
+      ],
+      "id": "59e1320f-d1b9-4e02-a895-5fbaef195489",
+      "name": "Code in JavaScript4"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/tap",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "x",
+              "value": "={{ $json.x }}"
+            },
+            {
+              "name": "y",
+              "value": "={{ $json.y }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2400,
+        352
+      ],
+      "id": "a2ee4768-ef9b-4393-bad8-82bd6610ef94",
+      "name": "tap"
+    },
+    {
+      "parameters": {
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/screen-state",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -288,
+        672
+      ],
+      "id": "4d0f23e4-7027-40b0-8763-14d0b52fcc31",
+      "name": "screen_state2"
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -496,
+        672
+      ],
+      "id": "09717d15-b6c7-4b84-8104-a23a7bbd1a76",
+      "name": "Wait5",
+      "webhookId": "fedd06e7-94c7-4036-a300-f5c20d6be9c6"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lấy toàn bộ dữ liệu JSON từ item đầu tiên\nconst data = $input.first().json;\n\n// Tìm phần tử trong mảng 'elements' có chứa text là \"DCIM\"\nconst dcimElement = data.elements.find(el => el.text === \"Tiếp\");\n\n// Kiểm tra xem có tìm thấy phần tử hay không\nif (dcimElement && dcimElement.center) {\n  // Trả về tọa độ x và y\n  return {\n    json: {\n      text: dcimElement.text,\n      found: true,\n      x: dcimElement.center.x,\n      y: dcimElement.center.y\n    }\n  };\n} else {\n  // Trả về thông báo lỗi nếu không tìm thấy\n  return {\n    json: {\n      found: false,\n      error: \"Không tìm thấy nút Tiktok trong danh sách elements.\"\n    }\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -64,
+        672
+      ],
+      "id": "3262f56f-637a-4aaa-8f68-8b8333378a18",
+      "name": "Code in JavaScript5"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/tap",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "x",
+              "value": "={{ $json.x }}"
+            },
+            {
+              "name": "y",
+              "value": "={{ $json.y }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        176,
+        672
+      ],
+      "id": "97250d80-424e-40f0-aa22-2dd28cdfcf83",
+      "name": "tap1"
+    },
+    {
+      "parameters": {
+        "amount": 3
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        384,
+        672
+      ],
+      "id": "4843b88a-00ed-49dd-bab2-657acc2a5ca5",
+      "name": "Wait6",
+      "webhookId": "327c0797-6242-4391-99fb-e935fb9e96b9"
+    },
+    {
+      "parameters": {
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/screen-state",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        592,
+        672
+      ],
+      "id": "1d67b43e-a960-4af5-9d33-1634c3cf7327",
+      "name": "screen_state3"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lấy toàn bộ dữ liệu JSON từ item đầu tiên\nconst data = $input.first().json;\n\n// Tìm phần tử trong mảng 'elements' có chứa text là \"DCIM\"\nconst dcimElement = data.elements.find(el => el.text === \"Đăng\");\n\n// Kiểm tra xem có tìm thấy phần tử hay không\nif (dcimElement && dcimElement.center) {\n  // Trả về tọa độ x và y\n  return {\n    json: {\n      text: dcimElement.text,\n      found: true,\n      x: dcimElement.center.x,\n      y: dcimElement.center.y\n    }\n  };\n} else {\n  // Trả về thông báo lỗi nếu không tìm thấy\n  return {\n    json: {\n      found: false,\n      error: \"Không tìm thấy nút Tiktok trong danh sách elements.\"\n    }\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        816,
+        672
+      ],
+      "id": "4826aff7-0b2d-498a-acc0-47198792f4a4",
+      "name": "Code in JavaScript6"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/tap",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "x",
+              "value": "={{ $json.x }}"
+            },
+            {
+              "name": "y",
+              "value": "={{ $json.y }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1056,
+        672
+      ],
+      "id": "301102f3-dcbd-48c3-b288-3656ae794876",
+      "name": "tap2"
+    },
+    {
+      "parameters": {
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/screen-state",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1520,
+        672
+      ],
+      "id": "648287a9-e98d-42b4-b809-253a8b8a0d1c",
+      "name": "screen_state4"
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1264,
+        672
+      ],
+      "id": "ac5a76e5-8123-4481-af61-92358dbe80a5",
+      "name": "Wait7",
+      "webhookId": "5a7d1666-9ac6-4a99-ac63-ee3e233b9df8"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lấy toàn bộ dữ liệu JSON từ item đầu tiên\nconst data = $input.first().json;\n\n// Tìm phần tử trong mảng 'elements' có chứa text là \"DCIM\"\nconst dcimElement = data.elements.find(el => el.text === \"Đăng video\");\n\n// Kiểm tra xem có tìm thấy phần tử hay không\nif (dcimElement && dcimElement.center) {\n  // Trả về tọa độ x và y\n  return {\n    json: {\n      text: dcimElement.text,\n      found: true,\n      x: dcimElement.center.x,\n      y: dcimElement.center.y\n    }\n  };\n} else {\n  // Trả về thông báo lỗi nếu không tìm thấy\n  return {\n    json: {\n      found: false,\n      error: \"Không tìm thấy nút Tiktok trong danh sách elements.\"\n    }\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1744,
+        672
+      ],
+      "id": "1b9c4de9-e5d8-4fbc-95ea-e88881e4f53f",
+      "name": "Code in JavaScript7"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2400,
+        752
+      ],
+      "id": "1e81ef83-5528-496a-86cc-019da8722acf",
+      "name": "Wait8",
+      "webhookId": "9510e09c-8b03-4227-97b6-9fd442a37590"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "device_id"
+            },
+            {
+              "name": "video_link"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -3424,
+        -80
+      ],
+      "id": "cb715902-396a-43d0-a9ea-eaf730e415a7",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "bc646bc6-5ddf-4333-bcca-440ddd5bb914",
+              "leftValue": "={{ $json.screen_on }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2688,
+        -96
+      ],
+      "id": "f8cec033-276a-4ff1-a778-b173b809bab2",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "amount": 3
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -2336,
+        -128
+      ],
+      "id": "40691e1c-7902-4323-a069-71ee6743edc1",
+      "name": "Wait9",
+      "webhookId": "ebf32a1e-833b-4aeb-8aef-d166ef33de36"
+    },
+    {
+      "parameters": {
+        "amount": 4
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -1152,
+        -96
+      ],
+      "id": "d6434d40-f96d-4bab-8ce3-07e48d2a5f40",
+      "name": "Wait10",
+      "webhookId": "1b79e998-b930-4b04-a043-388eb251583c"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://tunnel.example.com/workflow/download-media",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $('When Executed by Another Workflow').item.json.video_link }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -896,
+        -96
+      ],
+      "id": "60c605de-4d26-4dc5-92ac-c3e386b70012",
+      "name": "download_video_ve_may_chu"
+    },
+    {
+      "parameters": {
+        "url": "=https://tunnel.example.com/workflow/download-tasks/{{ $json.task_id }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -432,
+        -96
+      ],
+      "id": "a9e75943-17ea-447a-9c9c-197da6270600",
+      "name": "check_trang_thai_download"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "714aba54-93e1-4350-b0e3-088e5732d85f",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "done",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -224,
+        -96
+      ],
+      "id": "1475787a-2502-44e1-be0e-975fb2697ae2",
+      "name": "if_done_download"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/push-media",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "server_path",
+              "value": "={{ $json.path }}"
+            },
+            {
+              "name": "android_path",
+              "value": "/sdcard/DCIM/Camera/video.mp4"
+            },
+            {
+              "name": "clear",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        16,
+        -176
+      ],
+      "id": "4e00e43f-04e9-4df4-a30a-0f9076fb00c3",
+      "name": "copy_to_phone"
+    },
+    {
+      "parameters": {
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $json.device_id }}/screen-on ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -2944,
+        -96
+      ],
+      "id": "3756737e-d57a-438c-9fcd-28612d61db01",
+      "name": "check_screen_on"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/shell ",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "command",
+              "value": "input keyevent 26"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -2496,
+        -240
+      ],
+      "id": "01de4296-4cd3-48dd-8445-656f8214c021",
+      "name": "on_screen"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/shell",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "command",
+              "value": "input swipe 300 1400 300 300"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -2000,
+        -96
+      ],
+      "id": "dacd008b-8f62-4da4-8baa-96c17b888260",
+      "name": "unlock_screen"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://agent.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/shell ",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "command",
+              "value": "am start -a android.intent.action.VIEW -d \"content://com.android.externalstorage.documents/root/primary\""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        432,
+        -336
+      ],
+      "id": "9197d3ad-9d15-4440-ac6f-7df393eb463a",
+      "name": "open_for_share"
+    },
+    {
+      "parameters": {
+        "amount": 3
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        -304
+      ],
+      "id": "5a022784-50d6-400a-b435-916188bb1df3",
+      "name": "Wait11",
+      "webhookId": "224c0543-251e-4a9a-85b3-db35f7d9a7f7"
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -688,
+        -96
+      ],
+      "id": "1a054e7c-a955-4e03-a693-abe9794037b5",
+      "name": "Wait12",
+      "webhookId": "57e20cfb-4d54-4223-b668-fb04925d929a"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lấy toàn bộ dữ liệu JSON từ item đầu tiên\nconst data = $input.first().json;\n\n// Tìm phần tử trong mảng 'elements' có chứa text là \"DCIM\"\nconst dcimElement = data.elements.find(el => el.text === \"video.mp4\");\n\n// Kiểm tra xem có tìm thấy phần tử hay không\nif (dcimElement && dcimElement.center) {\n  // Trả về tọa độ x và y\n  return {\n    json: {\n      text: dcimElement.text,\n      found: true,\n      x: dcimElement.center.x,\n      y: dcimElement.center.y\n    }\n  };\n} else {\n  // Trả về thông báo lỗi nếu không tìm thấy\n  return {\n    json: {\n      found: false,\n      error: \"Không tìm thấy nút VIdeo.mp4 trong danh sách elements.\"\n    }\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        336
+      ],
+      "id": "2748301b-fd2d-4dc9-b9de-f3edafb0df7f",
+      "name": "tim_video.mp4"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lấy toàn bộ dữ liệu JSON từ item đầu tiên\nconst data = $input.first().json;\n\n// Tìm phần tử trong mảng 'elements' có chứa text là \"DCIM\"\nconst dcimElement = data.elements.find(el => el.text === \"TikTok\");\n\n// Kiểm tra xem có tìm thấy phần tử hay không\nif (dcimElement && dcimElement.center) {\n  // Trả về tọa độ x và y\n  return {\n    json: {\n      text: dcimElement.text,\n      found: true,\n      x: dcimElement.center.x,\n      y: dcimElement.center.y\n    }\n  };\n} else {\n  // Trả về thông báo lỗi nếu không tìm thấy\n  return {\n    json: {\n      found: false,\n      error: \"Không tìm thấy nút Tiktok trong danh sách elements.\"\n    }\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1184,
+        336
+      ],
+      "id": "a0af6e76-f839-4b39-bdfe-604bc4d71fc5",
+      "name": "tim_nut_share_tiktok"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lấy toàn bộ dữ liệu JSON từ item đầu tiên\nconst data = $input.first().json;\n\n// Tìm phần tử trong mảng 'elements' có chứa text là \"DCIM\"\nconst dcimElement = data.elements.find(el => el.text === \"Camera\");\n\n// Kiểm tra xem có tìm thấy phần tử hay không\nif (dcimElement && dcimElement.center) {\n  // Trả về tọa độ x và y\n  return {\n    json: {\n      text: dcimElement.text,\n      found: true,\n      x: dcimElement.center.x,\n      y: dcimElement.center.y\n    }\n  };\n} else {\n  // Trả về thông báo lỗi nếu không tìm thấy\n  return {\n    json: {\n      found: false,\n      error: \"Không tìm thấy nút DCIM trong danh sách elements.\"\n    }\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1712,
+        -80
+      ],
+      "id": "bef9cdb4-f015-42f8-977c-9f46440deaac",
+      "name": "mo_thu_muc_camera"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/long-press",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "x",
+              "value": "={{ $json.x }}"
+            },
+            {
+              "name": "y",
+              "value": "={{ $json.y }}"
+            },
+            {
+              "name": "duration_ms",
+              "value": "1100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        112,
+        336
+      ],
+      "id": "b4638211-9d74-49cf-abd3-3633dbc8cfc5",
+      "name": "hold_video_for_share"
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        256,
+        336
+      ],
+      "id": "63a58e5a-be24-4308-9baf-630b55e65950",
+      "name": "Wait13",
+      "webhookId": "24a7cf26-820d-47af-9f5d-100883064ea5"
+    },
+    {
+      "parameters": {
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/screen-state",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        400,
+        320
+      ],
+      "id": "17371da1-a596-4041-b80e-1ea141c1288b",
+      "name": "screen_state5"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lấy toàn bộ dữ liệu JSON từ item đầu tiên\nconst data = $input.first().json;\n\n// Tìm phần tử trong mảng 'elements' có text hoặc description là \"Chia sẻ\"\nconst shareElement = data.elements.find(el => \n  el.text === \"Chia sẻ\" || el.description === \"Chia sẻ\"\n);\n\n// Kiểm tra xem có tìm thấy phần tử hay không\nif (shareElement && shareElement.center) {\n  return {\n    json: {\n      text: shareElement.text || shareElement.description,\n      found: true,\n      x: shareElement.center.x,\n      y: shareElement.center.y\n    }\n  };\n} else {\n  return {\n    json: {\n      found: false,\n      error: \"Không tìm thấy phần tử có text hoặc description là 'Chia sẻ'.\"\n    }\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        544,
+        320
+      ],
+      "id": "15091076-da72-414b-b86f-b4cf0df27598",
+      "name": "nut_share_video"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/tap",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "x",
+              "value": "={{ $json.x }}"
+            },
+            {
+              "name": "y",
+              "value": "={{ $json.y }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        704,
+        320
+      ],
+      "id": "6dbef454-f3a2-4c20-85e7-00e030b25292",
+      "name": "tap_share"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f6a60445-d137-4c6a-8549-2f6980bb3785",
+              "leftValue": "{{ $json.found }}",
+              "rightValue": "false",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1952,
+        672
+      ],
+      "id": "b2a0e583-b722-409f-ba8f-804b071c70e4",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0f9b1100-d477-41c7-8998-75c72ba38247",
+              "name": "done",
+              "value": "done",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2112,
+        592
+      ],
+      "id": "bfcf1543-ccd1-4713-94d8-857d615e2302",
+      "name": "Done"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/shell",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "command",
+              "value": "input keyevent 3"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -2384,
+        80
+      ],
+      "id": "007ac14f-901c-4dc5-8e01-1b5c797e3687",
+      "name": "go_home"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/shell",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "command",
+              "value": "input keyevent 3"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -2208,
+        -240
+      ],
+      "id": "530c652d-0d97-4f10-8b65-1f79372b38c2",
+      "name": "go_home1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/shell",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "command",
+              "value": "input keyevent 3"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1024,
+        -224
+      ],
+      "id": "668b0c59-f5fe-48c0-a6df-45a74002c586",
+      "name": "go_home2"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0f9b1100-d477-41c7-8998-75c72ba38247",
+              "name": "done",
+              "value": "done",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2592,
+        736
+      ],
+      "id": "60b7bba0-b6a0-4ab9-8093-e56d388b12dc",
+      "name": "Done1"
+    },
+    {
+      "parameters": {
+        "amount": 3
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -1792,
+        -96
+      ],
+      "id": "ed44c2e6-56f0-44bb-8a55-66bf795e1ff2",
+      "name": "Wait14",
+      "webhookId": "5eb9d3da-9765-4633-bebc-3e0030e9c67b"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tunnel.example.com/workflow/devices/{{ $('device_id').item.json.device_id }}/shell",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "command",
+              "value": "input swipe 250 1400 300 300"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1520,
+        -96
+      ],
+      "id": "dab4d515-b76b-49ba-b69b-e478ac836d9d",
+      "name": "unlock_screen1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "device_id": {
+      "main": [
+        [
+          {
+            "node": "check_screen_on",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request3": {
+      "main": [
+        [
+          {
+            "node": "mo_thu_muc_camera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request4": {
+      "main": [
+        [
+          {
+            "node": "Wait2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait2": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request5": {
+      "main": [
+        [
+          {
+            "node": "tim_video.mp4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait3": {
+      "main": [
+        [
+          {
+            "node": "screen_state",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "screen_state": {
+      "main": [
+        [
+          {
+            "node": "tim_nut_share_tiktok",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request8": {
+      "main": [
+        [
+          {
+            "node": "Wait4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait4": {
+      "main": [
+        [
+          {
+            "node": "screen_state1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "screen_state1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript4": {
+      "main": [
+        [
+          {
+            "node": "tap",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "tap": {
+      "main": [
+        [
+          {
+            "node": "Wait5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait5": {
+      "main": [
+        [
+          {
+            "node": "screen_state2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript5": {
+      "main": [
+        [
+          {
+            "node": "tap1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "screen_state2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "tap1": {
+      "main": [
+        [
+          {
+            "node": "Wait6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait6": {
+      "main": [
+        [
+          {
+            "node": "screen_state3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript6": {
+      "main": [
+        [
+          {
+            "node": "tap2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "screen_state3": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "tap2": {
+      "main": [
+        [
+          {
+            "node": "Wait7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait7": {
+      "main": [
+        [
+          {
+            "node": "screen_state4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript7": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "screen_state4": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "device_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "on_screen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "go_home",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait9": {
+      "main": [
+        [
+          {
+            "node": "go_home1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait10": {
+      "main": [
+        [
+          {
+            "node": "go_home2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "download_video_ve_may_chu": {
+      "main": [
+        [
+          {
+            "node": "Wait12",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_trang_thai_download": {
+      "main": [
+        [
+          {
+            "node": "if_done_download",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "if_done_download": {
+      "main": [
+        [
+          {
+            "node": "copy_to_phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_screen_on": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "on_screen": {
+      "main": [
+        [
+          {
+            "node": "Wait9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "unlock_screen": {
+      "main": [
+        [
+          {
+            "node": "Wait14",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "open_for_share": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "copy_to_phone": {
+      "main": [
+        [
+          {
+            "node": "Wait11",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait11": {
+      "main": [
+        [
+          {
+            "node": "open_for_share",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait12": {
+      "main": [
+        [
+          {
+            "node": "check_trang_thai_download",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "tim_video.mp4": {
+      "main": [
+        [
+          {
+            "node": "hold_video_for_share",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "tim_nut_share_tiktok": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "mo_thu_muc_camera": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "hold_video_for_share": {
+      "main": [
+        [
+          {
+            "node": "Wait13",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait13": {
+      "main": [
+        [
+          {
+            "node": "screen_state5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "screen_state5": {
+      "main": [
+        [
+          {
+            "node": "nut_share_video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "nut_share_video": {
+      "main": [
+        [
+          {
+            "node": "tap_share",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "tap_share": {
+      "main": [
+        [
+          {
+            "node": "Wait3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "go_home": {
+      "main": [
+        [
+          {
+            "node": "unlock_screen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "go_home1": {
+      "main": [
+        [
+          {
+            "node": "unlock_screen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "go_home2": {
+      "main": [
+        [
+          {
+            "node": "download_video_ve_may_chu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait8": {
+      "main": [
+        [
+          {
+            "node": "Done1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait14": {
+      "main": [
+        [
+          {
+            "node": "unlock_screen1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "unlock_screen1": {
+      "main": [
+        [
+          {
+            "node": "Wait10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "00000000-0000-0000-0000-000000000000",
+  "meta": {
+    "instanceId": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "id": "exampleWorkflow",
+  "tags": []
+}

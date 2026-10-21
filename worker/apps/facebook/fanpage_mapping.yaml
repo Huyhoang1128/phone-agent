@@ -1,0 +1,14 @@
+# Mapping: Tên Fanpage của người khác → Từ khóa tìm kiếm & Thông tin bổ sung
+# Bất kỳ tài khoản Facebook nào cũng có thể tìm kiếm các Fanpage này để đăng bài viết.
+
+fanpages:
+  "Trang Làm Đẹp Mẫu":
+    search_keyword: "Trang Làm Đẹp Mẫu"
+    category: "Làm đẹp / Beauty"
+    owner: "Profile A"
+
+groups:
+  "NHÓM MẪU 24H":
+    search_keyword: "NHÓM MẪU 24H"
+  "Nhóm Mẫu 2":
+    search_keyword: "Nhóm Mẫu 2"

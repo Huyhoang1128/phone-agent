@@ -1,0 +1,18 @@
+chat:
+  quick_prompts:
+    # ----- Agents -----
+    pal:
+      - "Save a note: quarterly planning meeting moved to Friday 3pm"
+      - "What notes have I saved recently?"
+      - "Save a bookmark: https://docs.agno.com -- Agno documentation"
+
+    seek:
+      - "Research Anthropic -- products, funding, and recent developments"
+      - "Compare the top 3 AI agent frameworks"
+      - "What are the latest developments in agentic AI?"
+
+    # ----- Teams -----
+    research-team:
+      - "Research Anthropic comprehensively -- products, people, and market position"
+      - "What do our internal docs say about AI strategy vs industry trends?"
+      - "Research OpenAI -- enterprise products and recent developments"
