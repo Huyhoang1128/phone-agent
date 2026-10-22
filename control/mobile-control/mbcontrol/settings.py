@@ -628,8 +628,9 @@ CHANNEL_LAYERS = {
     },
 }
 
-# External video processing service (hardcoded to production as requested)
-GENVIDEO_API_URL = 'https://genvideo.example.com'
+# External video generation / processing service (genvideo). Each environment points at
+# its own instance; unset or empty falls back to the placeholder below.
+GENVIDEO_API_URL = os.environ.get('GENVIDEO_API_URL') or 'https://genvideo.example.com'
 
 # n8n webhook for dispatching TikTok comments
 N8N_DISPATCH_COMMENTS_WEBHOOK_URL = os.environ.get(

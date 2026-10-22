@@ -147,6 +147,7 @@ services:
       N8N_GENERATE_SCRIPTS_URL: ${N8N_GENERATE_SCRIPTS_URL:-https://n8n.example.com/webhook/generate-scripts}
       # Inpaint (xóa chữ) chạy server riêng — service inpaint riêng.
       INPAINT_API_URL: ${INPAINT_API_URL:-http://localhost:8022}
+      GENVIDEO_API_URL: ${GENVIDEO_API_URL:-}
       # "Tạo nhân vật": OpenAI image model (server-side) — sinh ảnh trực tiếp, không dùng face-swap ngoài.
       OPENAI_IMAGE_MODEL: ${OPENAI_IMAGE_MODEL:-gpt-image-2}
       # Image quality (low|medium|high). 'low' is ~15x cheaper than 'high'.
