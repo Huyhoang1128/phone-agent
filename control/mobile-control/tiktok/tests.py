@@ -1769,6 +1769,10 @@ class TiktokCommentPlanClusterExecutionTests(APITestCase):
             format='json',
         )
         fetch_task = Task.objects.exclude(id=first_task_id).get()
+        # Khoảng nghỉ CLUSTER_DELAY_MINUTES giữa bình luận gốc và lượt trả lời nằm ở bước lấy
+        # link (hẹn sau ~5 phút) — lượt trả lời chạy ngay khi lấy link xong.
+        fetch_schedule = Schedule.objects.get(task=fetch_task)
+        self.assertGreaterEqual(fetch_schedule.run_at, timezone.now() + timedelta(minutes=4, seconds=30))
 
         self.client.patch(
             self._task_detail_url(fetch_task.id),
@@ -1784,7 +1788,7 @@ class TiktokCommentPlanClusterExecutionTests(APITestCase):
         reply_task = Task.objects.exclude(id__in=[first_task_id, fetch_task.id]).get()
         self.assertEqual(reply_task.payload.get('comment_plan_id'), self.reply_plan.id)
         schedule = Schedule.objects.get(task=reply_task)
-        self.assertGreaterEqual(schedule.run_at, timezone.now() + timedelta(minutes=4, seconds=30))
+        self.assertLessEqual(schedule.run_at, timezone.now())
 
     def test_failed_item_retries_then_marks_cluster_failed_after_limit(self):
         execute = self.client.post(self._execute_cluster_url(self.root_plan.id), {}, format='json')
