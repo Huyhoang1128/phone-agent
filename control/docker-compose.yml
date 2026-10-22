@@ -170,6 +170,7 @@ services:
       # Inpaint (xóa chữ) chạy SERVER RIÊNG — service inpaint riêng
       # (KHÔNG build trong compose này; image torch/easyocr build lâu). Override qua .env.
       INPAINT_API_URL: ${INPAINT_API_URL:-http://localhost:8022}
+      GENVIDEO_API_URL: ${GENVIDEO_API_URL:-}
       # Làm nét / phóng to ảnh (Real-ESRGAN) chạy SERVER RIÊNG CÓ GPU — repo:
       # service upscale riêng (cũng KHÔNG build trong compose này:
       # image nền CUDA rất nặng, và host chạy compose này chưa chắc có GPU).
