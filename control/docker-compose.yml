@@ -33,6 +33,40 @@ services:
       timeout: 5s
       retries: 5
 
+  # Kafka (KRaft, 1 node) — kênh duy nhất giữa control và worker.
+  #   - Container trong compose kết nối qua kafka:9092 (listener INTERNAL).
+  #   - Worker chạy trên máy cắm điện thoại kết nối qua <host>:9094 (listener EXTERNAL);
+  #     đặt KAFKA_EXTERNAL_HOST = IP/hostname mà máy worker nhìn thấy (mặc định localhost).
+  # Topic được tạo tự động khi có producer/consumer đầu tiên.
+  kafka:
+    image: apache/kafka:3.9.1
+    restart: always
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:9092,EXTERNAL://:9094,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://${KAFKA_EXTERNAL_HOST:-localhost}:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    ports:
+      - "9094:9094"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+
   coturn:
     image: coturn/coturn:latest
     restart: always
@@ -55,6 +89,8 @@ services:
       context: ./mobile-control
     restart: always
     depends_on:
+      kafka:
+        condition: service_healthy
       db:
         condition: service_healthy
       redis:
@@ -70,7 +106,7 @@ services:
       DEBUG: ${DEBUG:-True}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0,api.example.com,app.example.com,phone.example.com}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:9094}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       KAFKA_DEVICE_EVENTS_TOPIC: ${KAFKA_DEVICE_EVENTS_TOPIC:-device-events}
       # Chatbot TikTok (TCS-v1+v2) — workflow engine + worker Kafka topics.
       # Prod KHÔNG dùng prefix `dev-` (khác docker-compose.dev.yml).
@@ -192,11 +228,14 @@ services:
       context: ./mobile-control
     restart: always
     depends_on:
+      kafka:
+        condition: service_healthy
       backend:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       DB_NAME: ${DB_NAME:-mbcontrol}
       DB_USER: ${DB_USER:-mbcontrol}
       DB_PASSWORD: ${DB_PASSWORD:-mbcontrol}
@@ -264,13 +303,15 @@ services:
       context: ./mobile-control
     restart: always
     depends_on:
+      kafka:
+        condition: service_healthy
       backend:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${DB_USER:-mbcontrol}:${DB_PASSWORD:-mbcontrol}@db:5432/${DB_NAME:-mbcontrol}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-change-me-in-production}
       DEBUG: ${DEBUG:-True}
-      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:9094}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       KAFKA_TASK_STATUS_TOPIC: ${KAFKA_TASK_STATUS_TOPIC:-task_status}
       # Unique per environment — isolates this env's committed offsets (partition
       # coverage is handled by manual assignment, not by the group_id).
@@ -303,7 +344,7 @@ services:
   #     DEBUG: ${DEBUG:-True}
   #     ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
   #     REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-  #     KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:9094}
+  #     KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
   #     KAFKA_TASK_EXECUTION_TOPIC: ${KAFKA_TASK_EXECUTION_TOPIC:-task_execution}
   #     KAFKA_TASK_STATUS_TOPIC: ${KAFKA_TASK_STATUS_TOPIC:-task_status}
   #     KAFKA_TASK_TOPIC: ${KAFKA_TASK_TOPIC:-task_execution}
@@ -317,6 +358,8 @@ services:
       context: ./mobile-control
     restart: always
     depends_on:
+      kafka:
+        condition: service_healthy
       backend:
         condition: service_healthy
       redis:
@@ -327,7 +370,7 @@ services:
       DEBUG: ${DEBUG:-True}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:9094}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       KAFKA_TASK_STATUS_TOPIC: ${KAFKA_TASK_STATUS_TOPIC:-task_status}
     volumes:
       - ./mobile-control:/app
@@ -387,12 +430,14 @@ services:
       context: ./devices_worker
     restart: always
     depends_on:
+      kafka:
+        condition: service_healthy
       redis:
         condition: service_healthy
       db:
         condition: service_healthy
     environment:
-      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:9094}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       KAFKA_DEVICE_EVENTS_TOPIC: ${KAFKA_DEVICE_EVENTS_TOPIC:-device-events}
       KAFKA_COMMANDS_TOPIC: ${KAFKA_COMMANDS_TOPIC:-device-commands}
       KAFKA_TASK_STATUS_TOPIC: ${KAFKA_TASK_STATUS_TOPIC:-task_status}
@@ -471,6 +516,7 @@ services:
 
 volumes:
   postgres_data:
+  kafka_data:
   redis_data:
   agent_teams_postgres_data:
 
