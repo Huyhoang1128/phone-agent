@@ -2669,7 +2669,7 @@ class UpdateCommentPlanByVideoLinkView(APIView):
                         payload__tiktok_comment_plan_cluster_execution=True,
                         owner=request.user,
                     )
-                    .exclude(payload__contains={'is_fetch_link': True})
+                    .exclude(payload__is_fetch_link=True)
                     .exclude(status__in=[TaskStatus.CANCELLED, TaskStatus.FAILED])
                     .select_related('owner', 'device')
                     .order_by('-created_at')
@@ -2679,7 +2679,8 @@ class UpdateCommentPlanByVideoLinkView(APIView):
                     logger.warning('update-comment-plan: no active task found for plan %s, skipping cluster progression', plan_id)
                     continue
                 fetch_link_exists = Task.objects.filter(
-                    payload__contains={'comment_plan_id': plan_id, 'is_fetch_link': True},
+                    payload__comment_plan_id=plan_id,
+                    payload__is_fetch_link=True,
                     owner=request.user,
                 ).exclude(status__in=[TaskStatus.CANCELLED, TaskStatus.FAILED]).exists()
                 if fetch_link_exists:
@@ -2699,7 +2700,8 @@ class UpdateCommentPlanByVideoLinkView(APIView):
             for plan_id in plan_ids:
                 fetch_task = (
                     Task.objects.filter(
-                        payload__contains={'comment_plan_id': plan_id, 'is_fetch_link': True},
+                        payload__comment_plan_id=plan_id,
+                    payload__is_fetch_link=True,
                         owner=request.user,
                     )
                     .exclude(status__in=[TaskStatus.CANCELLED, TaskStatus.FAILED, TaskStatus.COMPLETED])
