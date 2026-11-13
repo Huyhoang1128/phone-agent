@@ -2239,6 +2239,19 @@ class ContentViewSet(OwnedResourceMixin, viewsets.ModelViewSet):
             'tenant': ai_tenant.tenant_of(request.user),
         })
 
+    @action(detail=False, methods=['get'], url_path='image-models')
+    def image_models(self, request):
+        """Tên model THẬT mà từng provider đang dùng → ``{"openai": "gpt-image-2.5-flare"}``.
+
+        FE dùng để ghi đúng tên model trên menu "Model ảnh cảnh" thay vì hardcode:
+        đổi ``OPENAI_IMAGE_MODEL`` trong .env là giao diện đổi theo, không phải build
+        lại FE. Cùng một biểu thức với ``_openai_generate_image`` nên tên hiển thị
+        luôn khớp model được gọi. Chỉ trả tên model — không lộ key hay URL nào.
+        """
+        return Response({
+            'openai': getattr(settings, 'OPENAI_IMAGE_MODEL', '') or DEFAULT_OPENAI_IMAGE_MODEL,
+        })
+
     # ----------------------------- Image-generation helpers -----------------------------
 
     def _openai_generate_image(self, prompt, reference_b64=None, no_fallback=False, explain=False,

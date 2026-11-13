@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, ArrowUp, Check, ChevronDown, Copy, Crop, Download, Loader2, MapPin, Pencil, RotateCcw, Save, Shirt, Shuffle, Sparkles, SlidersHorizontal, Trash2, Upload, Wand2, X } from 'lucide-react'
 import { FilterPicker } from '@/components/FilterPicker'
 import { useToast } from '@/context/ToastContext'
@@ -22,6 +22,7 @@ import {
   QUICK_MODELS,
   QUICK_SIZES,
   QUICK_MODEL_OPTIONS,
+  openaiModelLabel,
   quickDefaults,
   quickCharacterDefaults,
   quickModelDefaults,
@@ -693,7 +694,7 @@ const SCENE_PROVIDER_DEFAULT: ImageProvider = 'openai'
 // chỉ đổi CÁI TÊN người dùng đọc, ở ô "Model (cố định)" và ở nhãn dưới mỗi ảnh nhân
 // vật vừa sinh. Muốn đổi model thật thì sửa CHAR_PROVIDER ở trên — sửa chỗ này
 // KHÔNG đổi gì trong request gửi đi. Để chuỗi rỗng thì quay về hiện tên model thật.
-const CHAR_MODEL_LABEL_OVERRIDE = 'Grok'
+const CHAR_MODEL_LABEL_OVERRIDE = ''
 
 // Nhân vật đơn giản: người dùng CHỈ nhập Quốc tịch + Độ tuổi + Mức nhan sắc; các nét còn
 // lại tự random mỗi lần bấm "Sinh nhân vật" (mở "Tuỳ chỉnh nâng cao" để chỉnh tay thì
@@ -903,10 +904,19 @@ export default function QuickImagePage() {
 
   // Model ảnh cảnh đổi được ngay trên giao diện (xem SCENE_PROVIDER_DEFAULT).
   const [sceneProvider, setSceneProvider] = useState<ImageProvider>(SCENE_PROVIDER_DEFAULT)
-  const charProviderLabel = CHAR_MODEL_LABEL_OVERRIDE
-    || QUICK_MODELS.find((m) => m.key === CHAR_PROVIDER)?.label
-    || CHAR_PROVIDER
-  const sceneProviderLabel = QUICK_MODELS.find((m) => m.key === sceneProvider)?.label || sceneProvider
+  // Tên model GPT THẬT lấy từ backend (OPENAI_IMAGE_MODEL) thay cho nhãn hardcode —
+  // đổi model trong .env là menu đổi theo. Chưa tải xong / lỗi → nhãn chung trong QUICK_MODELS.
+  const { data: imageModels } = useQuery({
+    queryKey: ['image-models'],
+    queryFn: () => contentsApi.imageModels(),
+    staleTime: 5 * 60_000,
+  })
+  const modelLabel = (key: ImageProvider) =>
+    key === 'openai' && imageModels?.openai
+      ? openaiModelLabel(imageModels.openai)
+      : QUICK_MODELS.find((m) => m.key === key)?.label || key
+  const charProviderLabel = CHAR_MODEL_LABEL_OVERRIDE || modelLabel(CHAR_PROVIDER)
+  const sceneProviderLabel = modelLabel(sceneProvider)
   const charPrompt = useMemo(() => buildQuickCharacterPrompt(charSel, CHAR_PROVIDER), [charSel])
   const charPromptVi = useMemo(() => buildQuickCharacterPromptVi(charSel, CHAR_PROVIDER), [charSel])
   const chosenFace = useMemo(() => cands.find((c) => c.id === chosenId)?.image || '', [cands, chosenId])
@@ -1487,7 +1497,7 @@ export default function QuickImagePage() {
             title="GPT cho ảnh đẹp nhất nhưng chặn đồ hở. Grok/Seedream đi qua fal.ai, kiểm duyệt lỏng hơn."
           >
             {QUICK_MODELS.map((m) => (
-              <option key={m.key} value={m.key}>{m.label}</option>
+              <option key={m.key} value={m.key}>{modelLabel(m.key)}</option>
             ))}
           </select>
         </label>
