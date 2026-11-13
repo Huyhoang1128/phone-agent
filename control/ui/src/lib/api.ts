@@ -820,6 +820,9 @@ export const contentsApi = {
       month_calls: number
       month_images: number
     }>(`/contents/image-usage/${date ? `?date=${date}` : ''}`),
+  // imageModels() → tên model THẬT backend đang gọi cho từng provider, đọc từ
+  // .env (OPENAI_IMAGE_MODEL) — để menu chọn model không phải hardcode tên phiên bản.
+  imageModels: () => req<{ openai: string }>('/contents/image-models/'),
   // 1) generateImage(prompt, referenceImage?, noFallback?, explainErrors?) → one image to review/regenerate.
   //    referenceImage (a character face / source image, data URI) makes the result
   //    resemble it via images.edit. noFallback=true (edit flow) surfaces an error

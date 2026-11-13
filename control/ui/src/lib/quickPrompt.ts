@@ -735,11 +735,29 @@ export const SHOT_FIELD = QUICK_SCENE_FIELDS.find((f) => f.key === 'shot')!
 export const ANGLE_FIELD = QUICK_SCENE_FIELDS.find((f) => f.key === 'angle')!
 export const HEAD_FIELD = QUICK_SCENE_FIELDS.find((f) => f.key === 'head')!
 
+// Nhãn của 'openai' cố ý KHÔNG ghi phiên bản: model GPT thật do backend chọn
+// (OPENAI_IMAGE_MODEL trong .env) nên FE hỏi /contents/image-models/ rồi ghi đè nhãn
+// này bằng openaiModelLabel(). 'GPT image' chỉ hiện trong lúc chờ API / khi API lỗi.
+// Seedream/Grok thì model gắn cứng trong code backend (content.fal_utils) nên ghi
+// thẳng ở đây là đúng.
 export const QUICK_MODELS: { key: ImageProvider; label: string }[] = [
-  { key: 'openai', label: 'GPT image 2' },
+  { key: 'openai', label: 'GPT image' },
   { key: 'seedream45', label: 'Seedream v4.5' },
   { key: 'grok', label: 'Grok Imagine' },
 ]
+
+/** Tên model OpenAI → nhãn dễ đọc: 'gpt-image-2.5-flare' → 'GPT image 2.5 Flare',
+ *  'gpt-image-2' → 'GPT image 2'. Tên lạ (không bắt đầu bằng gpt-image-) hiện nguyên văn. */
+export function openaiModelLabel(model: string): string {
+  const name = model.trim()
+  const m = /^gpt-image-(.+)$/i.exec(name)
+  if (!m) return name || 'GPT image'
+  const rest = m[1]
+    .split('-')
+    .map((part) => (/^\d/.test(part) ? part : part.charAt(0).toUpperCase() + part.slice(1)))
+    .join(' ')
+  return `GPT image ${rest}`
+}
 
 /** The three frame choices (OpenAI size strings, mapped to each model server-side). */
 export const QUICK_SIZES: { value: OpenAIImageSize; label: string }[] = [
